@@ -62,8 +62,8 @@ export const ACADEMIC_YEARS: AcademicYear[] = [
 ];
 
 export const SIGNERS: Signer[] = [
-  { id: "sg1", position: "Специалист отдела инновационного развития", positionGen: "специалиста отдела инновационного развития", name: "Рубан А.В.", female: true, isDefault: true },
-  { id: "sg2", position: "Заместитель директора по инновационному развитию", positionGen: "заместителя директора по инновационному развитию", name: "Рупенко А.Л.", female: false },
+  { id: "sg1", position: "Специалист отдела инновационного развития", positionGen: "специалиста отдела инновационного развития", name: "Орлова А.В.", female: true, isDefault: true },
+  { id: "sg2", position: "Заместитель директора по инновационному развитию", positionGen: "заместителя директора по инновационному развитию", name: "Громов А.Л.", female: false },
 ];
 
 const teacher = (

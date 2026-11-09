@@ -19,7 +19,7 @@ export interface NavSection {
 export const NAV: NavSection[] = [
   {
     items: [
-      { label: "Дашборд", href: "/", icon: LayoutDashboard, permission: "dashboard.view", shortcut: "G D" },
+      { label: "Обзор", href: "/", icon: LayoutDashboard, permission: "dashboard.view", shortcut: "G D" },
       { label: "Ученики", href: "/students", icon: Users, permission: "students.view", shortcut: "G S" },
       { label: "Группы", href: "/groups", icon: Boxes, permission: "groups.view", shortcut: "G G" },
       { label: "Журналы", href: "/journal", icon: BookOpenCheck, permission: "journal.view", shortcut: "G J" },
@@ -48,7 +48,7 @@ export const NAV: NavSection[] = [
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
-  "/": "Дашборд",
+  "/": "Обзор",
   "/students": "Ученики и договоры",
   "/groups": "Группы",
   "/journal": "Журналы посещаемости",

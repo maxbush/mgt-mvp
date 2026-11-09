@@ -29,7 +29,7 @@ function Guard({ permission, children }: { permission: Permission; children: Rea
         icon={<ShieldAlert />}
         title="Нет доступа"
         description="Ваша роль не позволяет открыть этот раздел. Обратитесь к администратору, чтобы расширить права."
-        action={<Button onClick={() => navigate("/")}>На дашборд</Button>}
+        action={<Button onClick={() => navigate("/")}>К обзору</Button>}
       />
     );
   }

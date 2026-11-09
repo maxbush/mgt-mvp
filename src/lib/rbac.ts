@@ -13,7 +13,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 };
 
 export const ALL_PERMISSIONS: { key: Permission; label: string; group: string }[] = [
-  { key: "dashboard.view", label: "Дашборд", group: "Общее" },
+  { key: "dashboard.view", label: "Обзор", group: "Общее" },
   { key: "students.view", label: "Просмотр реестра учеников", group: "Ученики" },
   { key: "students.edit", label: "Редактирование учеников и договоров", group: "Ученики" },
   { key: "groups.view", label: "Просмотр групп", group: "Группы" },
