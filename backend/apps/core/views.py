@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from .audit import audit
 from .models import AuditLog
-from .permissions import HasCode, role_name, user_codes
+from .permissions import HasCode, role_name, scoped_student_ids, user_codes
 from .serializers import AuditSerializer, LoginSerializer, me_payload
 
 
@@ -120,12 +120,18 @@ class SearchView(APIView):
         q = (request.query_params.get("q") or "").strip()
         if len(q) < 2:
             return Response({"students": [], "teachers": [], "contracts": [], "payments": []})
+        ids = scoped_student_ids(request.user)
         students = Student.objects.filter(last_name__icontains=q)[:10]
         students = students | Student.objects.filter(first_name__icontains=q)[:10]
+        if ids is not None:
+            students = students.filter(id__in=ids)
+        contracts = Contract.objects.filter(number__icontains=q)
+        if ids is not None:
+            contracts = contracts.filter(student_id__in=ids)
         return Response({
             "students": [{"id": str(s.id), "name": str(s), "status": s.status} for s in students.distinct()[:10]],
             "teachers": [{"id": str(t.id), "name": str(t)} for t in Teacher.objects.filter(last_name__icontains=q)[:10]],
-            "contracts": [{"id": str(c.id), "number": c.number, "student_id": str(c.student_id)} for c in Contract.objects.filter(number__icontains=q)[:10]],
+            "contracts": [{"id": str(c.id), "number": c.number, "student_id": str(c.student_id)} for c in contracts[:10]],
             "payments": [],
         })
 

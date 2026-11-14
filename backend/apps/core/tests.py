@@ -284,6 +284,41 @@ class ApiAuthTests(TestCase):
         err = r.json()["error"]
         self.assertTrue(err["details"], err)
 
+    def test_teacher_contracts_scoped(self):
+        c = self._login("teacher", "teacher123")
+        r = c.get("/api/v1/contracts/")
+        self.assertEqual(r.status_code, 200)
+        from apps.students.models import Student
+        own = {str(s.id) for s in Student.objects.filter(enrollments__group__code__in={"э1", "IT-1", "э2"}, enrollments__date_to__isnull=True)}
+        self.assertTrue(all(x["student"] in own for x in r.json()["results"]))
+
+    def test_teacher_print_endpoints(self):
+        """print/export: реестр — по scope, ведомости/чужой акт — 403."""
+        c = self._login("teacher", "teacher123")
+        r = c.get("/api/v1/print-data/registry")
+        self.assertEqual(r.status_code, 200)
+        self.assertLess(len(r.json()["students"]), 25)
+        from apps.dictionaries.models import StatementSheet
+        sh = StatementSheet.objects.first()
+        self.assertEqual(c.get(f"/api/v1/print-data/statement?sheet={sh.id}&month=2026-10").status_code, 403)
+        self.assertEqual(c.get(f"/api/v1/statements?sheet={sh.id}&month=2026-10").status_code, 403)
+        from apps.staff.models import Act
+        from apps.core.models import User
+        t1 = User.objects.get(username="teacher").teacher_id
+        act = Act.objects.exclude(teacher_id=t1).first()
+        self.assertEqual(c.get(f"/api/v1/print-data/act/{act.id}").status_code, 403)
+        from apps.groups.models import Group
+        other = Group.objects.exclude(code__in={"э1", "IT-1", "э2"}).first()
+        self.assertEqual(c.get(f"/api/v1/print-data/journal?group={other.id}&month=2026-10").status_code, 403)
+
+    def test_contract_student_reparent_denied(self):
+        c = self._login("admin", "admin123")
+        from apps.students.models import Contract, Student
+        con = Contract.objects.first()
+        other = Student.objects.exclude(id=con.student_id).first()
+        r = c.patch(f"/api/v1/contracts/{con.id}/", data={"student": str(other.id)}, content_type="application/json")
+        self.assertEqual(r.status_code, 409)
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

@@ -67,3 +67,14 @@ def teacher_group_ids(user):
     own = set(Group.objects.filter(teacher_id=user.teacher_id).values_list("id", flat=True))
     subs = set(Lesson.objects.filter(substitute_teacher_id=user.teacher_id).values_list("group_id", flat=True))
     return own | subs
+
+
+def scoped_student_ids(user):
+    """None — без ограничений; иначе множество id учеников групп преподавателя."""
+    if getattr(user, "role", None) == "teacher" and getattr(user, "teacher_id", None) and not has_code(user, "finance.view"):
+        from apps.groups.models import Enrollment
+
+        return set(Enrollment.objects.filter(
+            group_id__in=teacher_group_ids(user), date_to__isnull=True,
+        ).values_list("student_id", flat=True))
+    return None

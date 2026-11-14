@@ -46,6 +46,8 @@ def journal(request):
 @api_view(["GET"])
 def journal_unmarked(request):
     """GET /journal/unmarked — занятия в прошлом без отметок."""
+    if not has_code(request.user, "journal.view"):
+        raise RoleScopeError("Нет права journal.view")
     qs = svc.unmarked_past_lessons()
     if request.user.role == "teacher" and request.user.teacher_id:
         qs = qs.filter(group_id__in=teacher_group_ids(request.user))

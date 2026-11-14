@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from apps.core.audit import audit, audit_save
 from apps.core.calc import norm_contract_no
 from apps.core.errors import ConflictError
-from apps.core.permissions import HasCode, has_code, teacher_group_ids
+from apps.core.permissions import HasCode, has_code, scoped_student_ids, teacher_group_ids
 
 from .models import Contract, Student
 from .serializers import ContractSerializer, StudentSerializer, StudentWriteSerializer
@@ -121,6 +121,11 @@ class ContractViewSet(viewsets.ModelViewSet):
     permission_classes = [HasCode]
     http_method_names = ["get", "patch", "post", "head", "options"]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        ids = scoped_student_ids(self.request.user)
+        return qs.filter(student_id__in=ids) if ids is not None else qs
+
     def perform_create(self, s):
         c = contract_conflict(s.validated_data["number"], str(s.validated_data["academic_year"].id))
         if c:
@@ -128,6 +133,8 @@ class ContractViewSet(viewsets.ModelViewSet):
         audit_save(self.request, s, "create", after=lambda obj: s.data)
 
     def perform_update(self, s):
+        if "student" in s.validated_data and s.validated_data["student"].id != s.instance.student_id:
+            raise ConflictError("Нельзя перепривязать договор к другому ученику — закройте и создайте новый")
         c = contract_conflict(s.validated_data.get("number", s.instance.number), str(s.instance.academic_year_id), exclude_id=s.instance.id)
         if c:
             raise ConflictError(c["message"])

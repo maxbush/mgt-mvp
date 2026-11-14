@@ -97,8 +97,10 @@ def transfer_enrollment(request):
 
 @api_view(["GET"])
 def enrollments_list(request):
-    """GET /enrollments — все зачисления (для гидрации клиента)."""
+    """GET /enrollments — зачисления (для гидрации клиента). У teacher — scope по своим группам."""
     qs = Enrollment.objects.select_related("student", "group").all()
+    if request.user.role == "teacher" and request.user.teacher_id:
+        qs = qs.filter(group_id__in=teacher_group_ids(request.user))
     if request.query_params.get("group"):
         qs = qs.filter(group_id=request.query_params["group"])
     if request.query_params.get("student"):

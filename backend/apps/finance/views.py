@@ -103,6 +103,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 if r["ext_id"] and r["ext_id"] in existing:
                     res["dups"] += 1
                     continue
+                if r["ext_id"]:
+                    existing.add(r["ext_id"])  # дедуп и внутри одного файла
                 match = svc.exact_student_matches(r["payer"])
                 p = Payment.objects.create(
                     date=r["date"], payer=r["payer"], amount=r["amount"], ext_id=r["ext_id"],
@@ -201,6 +203,8 @@ class AdjustmentViewSet(viewsets.ModelViewSet):
 @api_view(["GET"])
 def statements(request):
     """GET /statements?sheet=&month=&group=&debt_only="""
+    if not has_code(request.user, "finance.view"):
+        raise RoleScopeError("Нет права finance.view")
     sheet = get_object_or_404(StatementSheet, pk=request.query_params.get("sheet"))
     month = request.query_params.get("month") or str(server_today())[:7]
     rows = svc.statement_rows(sheet, month, group_id=request.query_params.get("group"), debt_only=request.query_params.get("debt_only") in ("1", "true"))
@@ -210,6 +214,8 @@ def statements(request):
 @extend_schema(request=OpenApiTypes.OBJECT, responses={200: OpenApiTypes.OBJECT})
 @api_view(["GET"])
 def months_list(request):
+    if not has_code(request.user, "finance.view"):
+        raise RoleScopeError("Нет права finance.view")
     return Response(list(MonthClose.objects.values("month", "closed_at", "reopened_at", "reopen_reason").order_by("-month")))
 
 
