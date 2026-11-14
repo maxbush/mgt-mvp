@@ -39,7 +39,13 @@ def webhook(request):
     разбирается (ext_id → дедуп по платежам). Проверка подписи/IP — при наличии
     prod-ключей (BEPAID_WEBHOOK_IPS).
     """
+    if not _configured():
+        raise NotConfigured("bePaid не настроен: webhook отключён")
     allowed = getattr(settings, "BEPAID_WEBHOOK_IPS", [])
+    if not allowed:
+        # Fail-closed: без белого списка IP webhook не принимает события —
+        # иначе любой POST создавал бы платежи в очереди.
+        raise NotConfigured("BEPAID_WEBHOOK_IPS не задан: webhook отключён")
     if allowed:
         ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip()
         if ip not in allowed:
@@ -119,8 +125,9 @@ def sync_bepaid(request):
 @permission_classes([IsAuthenticated])
 def events_list(request):
     """GET /integrations/events/ — лента событий интеграций (мониторинг)."""
-    from apps.core.serializers import AuditSerializer  # noqa: F401
-
+    if not has_code(request.user, "finance.view"):
+        from apps.core.errors import RoleScopeError
+        raise RoleScopeError("Нет права finance.view")
     qs = IntegrationEvent.objects.all()[:200]
     return Response([
         {"id": e.id, "provider": e.provider, "event_type": e.event_type, "ext_id": e.ext_id,

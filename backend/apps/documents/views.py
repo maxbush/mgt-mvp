@@ -135,7 +135,8 @@ def print_statement(request):
     if not has_code(request.user, "finance.view"):
         raise RoleScopeError("Нет права finance.view")
     sheet = get_object_or_404(StatementSheet, pk=request.query_params.get("sheet"))
-    month = request.query_params.get("month")
+    from apps.core.dates import server_today
+    month = request.query_params.get("month") or str(server_today())[:7]
     rows = statement_rows(sheet, month)
     return Response({"month": month, "sheet": {"name": sheet.name, "address": sheet.address}, "rows": rows, "totals": statement_totals(rows)})
 
@@ -182,7 +183,8 @@ def statements_xlsx(request):
     if not has_code(request.user, "finance.view"):
         raise RoleScopeError("Нет права finance.view")
     sheet = get_object_or_404(StatementSheet, pk=request.query_params.get("sheet"))
-    month = request.query_params.get("month")
+    from apps.core.dates import server_today
+    month = request.query_params.get("month") or str(server_today())[:7]
     rows = statement_rows(sheet, month, group_id=request.query_params.get("group"))
     audit(request.user, "export", "finance.statement", meta={"sheet": str(sheet.id), "month": month})
     return _xlsx(

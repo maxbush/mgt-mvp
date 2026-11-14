@@ -6,8 +6,9 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from apps.core.audit import audit, audit_save
-from apps.core.errors import ApiError, ConflictError
+from apps.core.errors import ApiError, ConflictError, MonthClosedError
 from apps.core.permissions import HasCode, has_code, teacher_group_ids
+from apps.finance.models import MonthClose
 from apps.students.models import Student
 
 from .models import Enrollment, Group, MembershipChange
@@ -45,6 +46,8 @@ class GroupViewSet(viewsets.ModelViewSet):
         """POST /groups/{id}/enroll {student_id, date}"""
         g = self.get_object()
         st = get_object_or_404(Student, pk=request.data.get("student_id"))
+        if MonthClose.is_closed(str(request.data.get("date", ""))[:7]):
+            raise MonthClosedError("Месяц зачисления закрыт")
         try:
             en = enroll(st, g, request.data.get("date"), user=request.user)
         except ValueError as e:
@@ -57,6 +60,8 @@ class GroupViewSet(viewsets.ModelViewSet):
         """POST /groups/{id}/unenroll {student_id, date}"""
         g = self.get_object()
         st = get_object_or_404(Student, pk=request.data.get("student_id"))
+        if MonthClose.is_closed(str(request.data.get("date", ""))[:7]):
+            raise MonthClosedError("Месяц отчисления закрыт")
         try:
             en = unenroll(st, g, request.data.get("date"), user=request.user)
         except ValueError as e:
@@ -85,6 +90,8 @@ def transfer_enrollment(request):
     if not has_code(request.user, "groups.edit"):
         from apps.core.errors import RoleScopeError
         raise RoleScopeError("Недостаточно прав")
+    if MonthClose.is_closed(str(request.data.get("date", ""))[:7]):
+        raise MonthClosedError("Месяц перевода закрыт")
     try:
         en = transfer(st, g_from, g_to, request.data.get("date"), user=request.user)
     except ValueError as e:

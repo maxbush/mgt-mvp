@@ -141,9 +141,9 @@ export function makeApiActions(get: S): Partial<AppState> {
       runV(
         get,
         async () => {
-          const r = await api.post<{ loaded: number; auto: number; queued: number; dups: number; bad_rows: { row: number }[] }>(
+          const r = await api.post<{ loaded: number; auto: number; queued: number; dups: number; closed_month?: number; bad_rows: { row: number }[] }>(
             "/payments/import", { csv });
-          return { loaded: r.loaded, auto: r.auto, queued: r.queued, dups: r.dups, closed: 0, bad: (r.bad_rows ?? []).map((x) => x.row) };
+          return { loaded: r.loaded, auto: r.auto, queued: r.queued, dups: r.dups, closed: r.closed_month ?? 0, bad: (r.bad_rows ?? []).map((x) => x.row) };
         },
         { loaded: 0, auto: 0, queued: 0, dups: 0, closed: 0, bad: [] },
       ),

@@ -66,7 +66,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         audit_save(self.request, s, "update", after=lambda obj: s.data)
 
     def destroy(self, request, *a, **kw):
-        """Удаление только при отсутствии связанных данных — иначе 409."""
+        """Удаление только при отсутствии связанных данных — иначе 409. Требует students.delete."""
+        if not has_code(request.user, "students.delete"):
+            from apps.core.errors import RoleScopeError
+            raise RoleScopeError("Нет права students.delete")
         st = self.get_object()
         if st.contracts.exists() or st.payments.exists() or st.enrollments.exists():
             raise ConflictError("Нельзя удалить ученика: есть договоры/платежи/зачисления. Переведите в статус «выбыл».")

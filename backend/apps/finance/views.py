@@ -72,7 +72,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if not has_code(request.user, "payments.import"):
             raise RoleScopeError("Нет права payments.import")
         f = request.FILES.get("file")
-        text = request.data.get("csv") or (f.read().decode("utf-8-sig") if f else "")
+        try:
+            text = request.data.get("csv") or (f.read().decode("utf-8-sig") if f else "")
+        except UnicodeDecodeError:
+            raise ConflictError("Файл не является CSV в UTF-8")
         dry = request.data.get("dry_run") in ("1", "true", True)
         rows, bad = [], []
         for i, line in enumerate(csv.reader(io.StringIO(text), delimiter=";")):
@@ -92,13 +95,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 bad.append({"row": i + 1, "raw": line})
                 continue
             rows.append({"date": d, "payer": payer, "amount": amount, "ext_id": ext})
+        # Платежи в закрытый месяц запрещены — иначе сломают зафиксированные остатки.
+        closed_rows = [r for r in rows if MonthClose.is_closed(r["date"][:7])]
+        rows = [r for r in rows if r not in closed_rows]
         existing = set(Payment.objects.filter(ext_id__in=[r["ext_id"] for r in rows if r["ext_id"]]).values_list("ext_id", flat=True))
-        res = {"loaded": len(rows), "auto": 0, "queued": 0, "dups": 0, "bad": len(bad), "bad_rows": bad[:20], "created": []}
+        res = {"loaded": len(rows), "auto": 0, "queued": 0, "dups": 0, "bad": len(bad), "bad_rows": bad[:20], "closed_month": len(closed_rows), "created": []}
         if dry:
             res["dups"] = sum(1 for r in rows if r["ext_id"] and r["ext_id"] in existing)
             return Response(res)
         with transaction.atomic():
-            batch = ImportBatch.objects.create(user=request.user, file_name=getattr(f, "name", ""), rows=len(rows), rejected=len(bad))
+            batch = ImportBatch.objects.create(user=request.user, file_name=getattr(f, "name", ""), rows=len(rows), rejected=len(bad) + len(closed_rows))
             for r in rows:
                 if r["ext_id"] and r["ext_id"] in existing:
                     res["dups"] += 1
@@ -162,6 +168,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         p = self.get_object()
+        _check_month_open(str(p.date)[:7])
         with transaction.atomic():
             p.status = "rejected"
             p.reject_reason = request.data.get("reason", "")
