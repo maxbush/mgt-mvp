@@ -4,6 +4,7 @@ from datetime import date as _date, timedelta
 
 from apps.dictionaries.models import AcademicYear
 from apps.core.dates import server_today
+from apps.groups.models import Group
 from apps.journal.models import Attendance, Lesson
 from apps.staff.models import Teacher
 from apps.students.models import Student
@@ -63,6 +64,10 @@ def dashboard_payload(scope_group_ids=None):
     if scope_group_ids is not None:
         lessons_qs = lessons_qs.filter(group_id__in=scope_group_ids)
 
+    groups_qs = Group.objects.filter(status="active")
+    if scope_group_ids is not None:
+        groups_qs = groups_qs.filter(id__in=scope_group_ids)
+
     months = _months_of_year(m)
     series_att = [{"month": mm, **_att_stats(mm, scope_group_ids)} for mm in months]
     series_fin = []
@@ -79,6 +84,7 @@ def dashboard_payload(scope_group_ids=None):
             "activeStudents": active.count(),
             "totalStudents": students.count(),
             "newThisMonth": students.filter(created_at__startswith=m).count(),
+            "groups": groups_qs.count(),
             "attendanceRate": att["rate"],
             "attendanceDelta": round(att["rate"] - att_prev["rate"], 1),
             "totalBalance": round(sum(balances), 2),

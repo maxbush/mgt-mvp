@@ -1,4 +1,3 @@
-import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
@@ -7,7 +6,8 @@ import {
 } from "lucide-react";
 import { useAppStore, useCurMonth, useCurrentUser, useScopedGroupIds, useToday } from "@/lib/store";
 import { can } from "@/lib/rbac";
-import { attendanceSeries, dashboardKpis, financeSeries, lessonMarkedCount, recentLessons, upcomingLessons, groupById, teacherById, branchById } from "@/lib/selectors";
+import { lessonMarkedCount, recentLessons, upcomingLessons, groupById, teacherById, branchById } from "@/lib/selectors";
+import { useDashboardData } from "@/lib/server-data";
 import { cn, formatDate, formatDateTime, formatMoney, monthLabel, plural, shortName, weekdayShort } from "@/lib/utils";
 import { KpiCard, PageHeader, PageSkeleton, useFakeLoading } from "@/components/shared/bits";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,9 +43,7 @@ export function DashboardPage() {
   const loading = useFakeLoading(300);
   const role = state.role;
 
-  const kpi = React.useMemo(() => dashboardKpis(state, scope), [state, scope]);
-  const attSeries = React.useMemo(() => attendanceSeries(state, scope), [state, scope]);
-  const finSeries = React.useMemo(() => financeSeries(state), [state]);
+  const { kpis: kpi, attendanceSeries: attSeries, financeSeries: finSeries } = useDashboardData(scope);
   const today = upcomingLessons(state, DEMO_TODAY, scope, 8).filter((l) => l.date === DEMO_TODAY);
   const recent = recentLessons(state, DEMO_TODAY, scope, 6);
   const firstName = user.name.split(" ")[1] ?? user.name;

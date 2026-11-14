@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { ExternalLink, Lock, LockOpen, Printer, Wallet, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useAppStore, useCurMonth } from "@/lib/store";
 import { can } from "@/lib/rbac";
-import { isMonthClosed, statementRows, statementSheets, type StatementRow } from "@/lib/selectors";
+import { isMonthClosed, statementSheets, type StatementRow } from "@/lib/selectors";
+import { useStatementRows } from "@/lib/server-data";
 import { cn, compareRu, formatMoney, fullName, monthLabel, plural, round2 } from "@/lib/utils";
 import { DataTable, DataTableColumnHeader } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,7 @@ export function StatementsPage() {
 
   const branch = sheets.find((b) => b.id === sheetId);
   const branchId = state.branches.find((b) => sheetId === `br_${b.id}`)?.id ?? state.groups.find((g) => g.direction === "it")?.branchId;
-  const rows = React.useMemo(() => (sheetId ? statementRows(state, sheetId, month) : []), [state, sheetId, month]);
+  const rows = useStatementRows(sheetId ?? "", month);
   const totals = React.useMemo(
     () => ({
       opening: round2(rows.reduce((a, r) => a + r.opening, 0)),

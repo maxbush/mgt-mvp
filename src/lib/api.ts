@@ -141,14 +141,16 @@ export const me = () => api.get<MePayload>("/auth/me");
 
 export async function hydrate(meData: MePayload): Promise<DataState> {
   const [branches, years, signers, teachers, groups, students, contracts, enrollments, lessons, marks,
-    payments, adjustments, acts, audit, _templates, addendums, policies, taxRates, actRates, sysSet] = await Promise.all([
+    payments, adjustments, acts, audit, _templates, addendums, policies, taxRates, actRates, sysSet, sheets] = await Promise.all([
     list<any>("/branches/"), list<any>("/academic-years/"), list<any>("/signers/"), list<any>("/teachers/"),
     list<any>("/groups/"), list<any>("/students/"), list<any>("/contracts/"), list<any>("/enrollments/"),
     list<any>("/lessons/"), api.get<AttendanceMap>("/marks"),
     list<any>("/payments/"), list<any>("/adjustments/"), list<any>("/acts/"), list<any>("/audit/").catch(() => [] as any[]),
     list<any>("/addendum-templates/"), list<any>("/addendums/"), list<any>("/charge-policies/"),
     list<any>("/tax-rates/"), list<any>("/act-rates/"), api.get<Record<string, unknown>>("/settings/"),
+    list<any>("/statement-sheets/").catch(() => [] as any[]),
   ]);
+  _sheets = sheets;
   const pol = policies.sort((a, b) => b.date_from.localeCompare(a.date_from))[0];
   const inc = taxRates.filter((t) => t.kind === "income_tax").sort((a, b) => b.date_from.localeCompare(a.date_from))[0];
   const fsz = taxRates.filter((t) => t.kind === "fszn").sort((a, b) => b.date_from.localeCompare(a.date_from))[0];
@@ -176,4 +178,43 @@ export async function hydrate(meData: MePayload): Promise<DataState> {
     payments: payments.map(b2f.payment), adjustments: adjustments.map(b2f.adjustment), acts: acts.map(b2f.act),
     signers: signers.map(b2f.signer), audit: audit.map(b2f.audit), membership, addendums: addendums.map(b2f.addendum), settings,
   };
+}
+
+/* ---------- серверные вычисления (ведомости/дашборд) ---------- */
+
+let _sheets: any[] = [];
+
+/** Фронтовой id листа (`br_{branchId}` / `dir_it`) → id StatementSheet на backend'е. */
+function sheetApiId(frontendId: string): string | null {
+  if (frontendId.startsWith("br_")) {
+    const branchId = frontendId.slice(3);
+    return _sheets.find((s) => s.kind === "branch" && s.branch === branchId)?.id ?? null;
+  }
+  if (frontendId === "dir_it") return _sheets.find((s) => s.kind === "direction")?.id ?? null;
+  return _sheets.find((s) => s.id === frontendId)?.id ?? null;
+}
+
+export interface ServerStatementRow {
+  student: { id: string; name: string; grade: string; status: string };
+  groups: { id: string; code: string; name: string }[];
+  opening: number; paid: number; consumedCount: number; consumed: number; closing: number;
+  byGroup: Record<string, number>; multi: boolean; foreign: boolean;
+}
+
+export function fetchStatement(frontendSheetId: string, month: string, groupId?: string, debtOnly?: boolean) {
+  const sheet = sheetApiId(frontendSheetId);
+  if (!sheet) return Promise.resolve({ rows: [] as ServerStatementRow[], totals: null });
+  const q = new URLSearchParams({ sheet, month });
+  if (groupId) q.set("group", groupId);
+  if (debtOnly) q.set("debt_only", "1");
+  return api.get<{ rows: ServerStatementRow[]; totals: Record<string, number> | null }>(`/statements?${q}`);
+}
+
+export function fetchDashboard() {
+  return api.get<{
+    today: string;
+    kpis: { activeStudents: number; totalStudents: number; newThisMonth: number; groups: number; attendanceRate: number; attendanceDelta: number; totalBalance: number; debtors: number; paidThisMonth: number; paidDelta: number; teachers: number; lessonsThisMonth: number; pending: number };
+    attendanceSeries: { month: string; total: number; present: number; rate: number }[];
+    financeSeries: { month: string; paid: number; consumed: number }[];
+  }>("/dashboard");
 }
