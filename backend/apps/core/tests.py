@@ -336,6 +336,39 @@ class ApiAuthTests(TestCase):
         r = c.post(f"/api/v1/acts/{act.id}/sign/", content_type="application/json")
         self.assertEqual(r.status_code, 403, r.content)
 
+    def test_teacher_cannot_create_lesson_other_group(self):
+        c = self._login("teacher", "teacher123")
+        from apps.groups.models import Group
+        g = Group.objects.exclude(code__in={"э1", "IT-1", "э2"}).first()
+        r = c.post("/api/v1/lessons/", data={"group": str(g.id), "date": "2026-10-15", "time": "18:00"},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 403, r.content)
+
+    def test_attendance_rejects_unknown_students(self):
+        c = self._login("admin", "admin123")
+        from apps.journal.models import Lesson
+        from apps.students.models import Student
+        l = Lesson.objects.filter(date__startswith="2026-10").first()
+        stranger = Student.objects.exclude(enrollments__group_id=l.group_id).first()
+        r = c.put(f"/api/v1/lessons/{l.id}/attendance/", data={"marks": {str(stranger.id): "present"}},
+                  content_type="application/json")
+        self.assertEqual(r.status_code, 409, r.content)
+
+    def test_payment_status_guards(self):
+        c = self._login("accountant", "account123")
+        from apps.finance.models import Payment
+        from apps.students.models import Student
+        p = Payment.objects.filter(status="confirmed").first()
+        st = Student.objects.first()
+        bodies = {
+            "confirm": {"student_id": str(st.id)},
+            "reject": {},
+            "split": {"parts": [{"student_id": str(st.id), "amount": "1"}, {"student_id": str(st.id), "amount": "1"}]},
+        }
+        for action, data in bodies.items():
+            r = c.post(f"/api/v1/payments/{p.id}/{action}/", data=data, content_type="application/json")
+            self.assertEqual(r.status_code, 409, (action, r.content))
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

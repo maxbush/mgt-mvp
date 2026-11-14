@@ -135,8 +135,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def confirm(self, request, pk=None):
-        """Подтвердить сопоставление: {student_id}"""
+        """Подтвердить сопоставление: {student_id}. Только из pending."""
         p = self.get_object()
+        if p.status != "pending":
+            raise ConflictError(f"Платёж уже обработан (status={p.status}) — сначала requeue")
         _check_month_open(str(p.date)[:7])
         st = get_object_or_404(Student, pk=request.data.get("student_id"))
         with transaction.atomic():
@@ -149,6 +151,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def split(self, request, pk=None):
         """Разделить платёж: {parts: [{student_id, amount}]} — сумма частей = сумме платежа."""
         p = self.get_object()
+        if p.status != "pending":
+            raise ConflictError(f"Платёж уже обработан (status={p.status}) — сначала requeue")
         _check_month_open(str(p.date)[:7])
         parts = request.data.get("parts", [])
         if len(parts) < 2:
@@ -168,6 +172,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         p = self.get_object()
+        if p.status != "pending":
+            raise ConflictError(f"Платёж уже обработан (status={p.status}) — сначала requeue")
         _check_month_open(str(p.date)[:7])
         with transaction.atomic():
             p.status = "rejected"

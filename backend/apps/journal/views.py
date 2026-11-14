@@ -13,6 +13,7 @@ from apps.core.errors import ApiError, ConflictError, MonthClosedError, RoleScop
 from apps.core.permissions import HasCode, has_code, teacher_group_ids
 from apps.finance.models import MonthClose
 from apps.groups.models import Group
+from apps.groups.services import group_student_ids
 
 from . import services as svc
 from .models import Attendance, Lesson
@@ -77,6 +78,9 @@ class LessonViewSet(viewsets.ModelViewSet):
         if MonthClose.is_closed(lesson_date[:7]):
             raise MonthClosedError(f"Месяц {lesson_date[:7]} закрыт")
         g = s.validated_data["group"]
+        u = self.request.user
+        if u.role == "teacher" and u.teacher_id and g.id not in teacher_group_ids(u):
+            raise RoleScopeError("Группа вне вашего scope")
         if Lesson.objects.filter(group=g, date=s.validated_data["date"]).exists():
             raise ConflictError(f"Занятие группы {g.code} на {lesson_date} уже существует")
         with transaction.atomic():
@@ -113,6 +117,10 @@ class LessonViewSet(viewsets.ModelViewSet):
             _deny(code, reason)
         marks = request.data.get("marks", {})
         valid = {c[0] for c in Attendance.STATUS}
+        enrolled = {str(x) for x in group_student_ids(lesson.group_id, on=lesson.date)}
+        unknown = [sid for sid in marks if sid not in enrolled]
+        if unknown:
+            raise ConflictError("Отметки для учеников вне группы")
         changed = 0
         with transaction.atomic():
             for sid, status_v in marks.items():
@@ -141,6 +149,8 @@ def generate_lessons(request, group_id):
     if not has_code(request.user, "journal.edit"):
         raise RoleScopeError("Нет права journal.edit")
     g = get_object_or_404(Group, pk=group_id)
+    if request.user.role == "teacher" and request.user.teacher_id and g.id not in teacher_group_ids(request.user):
+        raise RoleScopeError("Группа вне вашего scope")
     month = request.data.get("month") or str(server_today())[:7]
     if MonthClose.is_closed(month):
         raise MonthClosedError(f"Месяц {month} закрыт")
