@@ -5,7 +5,7 @@
 from datetime import date as _date
 from decimal import Decimal
 
-from django.utils.timezone import localdate
+from apps.core.dates import server_today
 
 from apps.core.calc import (
     from_k, is_chargeable, month_row_k, norm_name, similarity_pct, split_even, to_k,
@@ -111,7 +111,7 @@ def balance_history(student_id, up_to=None):
     if not y:
         return []
     m = _ds(y.start_date)[:7]
-    last = up_to or _ds(localdate())[:7]
+    last = up_to or str(server_today())[:7]
     rows = []
     while m <= last:
         rows.append(balance_row(student_id, m))

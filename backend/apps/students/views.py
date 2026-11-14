@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from apps.core.audit import audit, audit_save
 from apps.core.calc import norm_contract_no
 from apps.core.errors import ConflictError
-from apps.core.permissions import HasCode
+from apps.core.permissions import HasCode, has_code, teacher_group_ids
 
 from .models import Contract, Student
 from .serializers import ContractSerializer, StudentSerializer, StudentWriteSerializer
@@ -38,6 +38,11 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Student.objects.prefetch_related("contracts__academic_year")
+        # Преподаватель видит только учеников своих групп (включая замены), как в журнале.
+        u = self.request.user
+        if u.role == "teacher" and u.teacher_id and not has_code(u, "finance.view"):
+            gids = teacher_group_ids(u)
+            qs = qs.filter(enrollments__group_id__in=gids, enrollments__date_to__isnull=True) if gids else qs.none()
         q = self.request.query_params.get("q")
         if q:
             qs = qs.filter(
@@ -45,9 +50,9 @@ class StudentViewSet(viewsets.ModelViewSet):
                 | Q(parent_name__icontains=q) | Q(parent_phone__icontains=q)
             )
         if self.request.query_params.get("branch"):
-            qs = qs.filter(enrollments__group__branch_id=self.request.query_params["branch"], enrollments__to__isnull=True)
+            qs = qs.filter(enrollments__group__branch_id=self.request.query_params["branch"], enrollments__date_to__isnull=True)
         if self.request.query_params.get("group"):
-            qs = qs.filter(enrollments__group_id=self.request.query_params["group"], enrollments__to__isnull=True)
+            qs = qs.filter(enrollments__group_id=self.request.query_params["group"], enrollments__date_to__isnull=True)
         if self.request.query_params.get("year"):
             qs = qs.filter(contracts__academic_year_id=self.request.query_params["year"])
         if self.request.query_params.get("status"):
@@ -85,13 +90,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         st = self.get_object()
         if request.method == "GET":
             return Response(ContractSerializer(st.contracts.select_related("academic_year"), many=True).data)
-        s = ContractSerializer(data=request.data)
+        s = ContractSerializer(data={**request.data, "student": str(st.id)})
         s.is_valid(raise_exception=True)
         c = contract_conflict(s.validated_data["number"], str(s.validated_data["academic_year"].id))
         if c:
             raise ConflictError(c["message"])
         with transaction.atomic():
-            obj = Contract.objects.create(student=st, **s.validated_data)
+            obj = Contract.objects.create(**s.validated_data)
             audit(request.user, "create", "students.contract", obj.pk, after=ContractSerializer(obj).data)
         return Response(ContractSerializer(obj).data, status=201)
 
@@ -115,6 +120,12 @@ class ContractViewSet(viewsets.ModelViewSet):
     view_code = "students.view"
     permission_classes = [HasCode]
     http_method_names = ["get", "patch", "post", "head", "options"]
+
+    def perform_create(self, s):
+        c = contract_conflict(s.validated_data["number"], str(s.validated_data["academic_year"].id))
+        if c:
+            raise ConflictError(c["message"])
+        audit_save(self.request, s, "create", after=lambda obj: s.data)
 
     def perform_update(self, s):
         c = contract_conflict(s.validated_data.get("number", s.instance.number), str(s.instance.academic_year_id), exclude_id=s.instance.id)

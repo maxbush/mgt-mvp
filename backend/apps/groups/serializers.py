@@ -38,9 +38,9 @@ class GroupSerializer(serializers.ModelSerializer):
         return str(o.teacher) if o.teacher_id else None
 
     def get_current_price(self, o):
-        from django.utils.timezone import localdate
+        from apps.core.dates import server_today
 
-        return float(o.price_on(str(localdate())))
+        return float(o.price_on(str(server_today())))
 
     def get_student_count(self, o):
         from .services import group_student_ids

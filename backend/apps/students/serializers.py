@@ -9,7 +9,6 @@ class ContractSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contract
         fields = ["id", "student", "academic_year", "academic_year_name", "number", "date", "status", "closed_at", "comment"]
-        read_only_fields = ["student"]
 
 
 class StudentSerializer(serializers.ModelSerializer):

@@ -2,7 +2,7 @@ from datetime import date as _date, timedelta
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils.timezone import localdate
+from apps.core.dates import server_today
 from rest_framework import viewsets
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view
@@ -34,7 +34,7 @@ def journal(request):
     if not has_code(request.user, "journal.view"):
         raise RoleScopeError("Нет права journal.view")
     group_id = request.query_params.get("group")
-    month = request.query_params.get("month") or str(localdate())[:7]
+    month = request.query_params.get("month") or str(server_today())[:7]
     # scope преподавателя
     if request.user.role == "teacher" and request.user.teacher_id:
         if group_id not in {str(x) for x in teacher_group_ids(request.user)}:
@@ -139,7 +139,7 @@ def generate_lessons(request, group_id):
     if not has_code(request.user, "journal.edit"):
         raise RoleScopeError("Нет права journal.edit")
     g = get_object_or_404(Group, pk=group_id)
-    month = request.data.get("month") or str(localdate())[:7]
+    month = request.data.get("month") or str(server_today())[:7]
     if MonthClose.is_closed(month):
         raise MonthClosedError(f"Месяц {month} закрыт")
     days = request.data.get("days") or g.weekdays or [1, 4]

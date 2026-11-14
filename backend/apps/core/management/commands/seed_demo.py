@@ -107,6 +107,9 @@ class Command(BaseCommand):
     def handle(self, *a, **kw):
         if kw["reset"]:
             self._wipe()
+        elif Direction.objects.exists():
+            self.stdout.write(self.style.WARNING("Данные уже загружены — пропускаю. Для пересоздания: seed_demo --reset"))
+            return
         self._seed()
         self.stdout.write(self.style.SUCCESS("Демо-данные загружены"))
 

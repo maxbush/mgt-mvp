@@ -95,7 +95,8 @@ AUTHENTICATION_BACKENDS = [
 # Блокировка подбора пароля: 5 попыток → 15 минут
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 0.25  # часа
-AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+# Вложенный список = AND (username+ip вместе); плоский список в axes — OR и лочил бы весь IP.
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 
 LANGUAGE_CODE = "ru-ru"
 TIME_ZONE = "Europe/Minsk"
@@ -153,3 +154,12 @@ BEPAID_SERVICE_NUMBER = os.environ.get("BEPAID_SERVICE_NUMBER", "")
 
 # Загрузки
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # CSV/XLSX ≤ 10 МБ
+
+# Fail-closed для прода: без явных секретов приложение не должно стартовать.
+if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+
+    if SECRET_KEY == "dev-insecure-change-me" or len(SECRET_KEY) < 32:
+        raise ImproperlyConfigured("SECRET_KEY не задан или оставлен дефолтным при DEBUG=0")
+    if not FERNET_KEY:
+        raise ImproperlyConfigured("FERNET_KEY обязателен при DEBUG=0: иначе ПД шифруются ключом из SECRET_KEY")

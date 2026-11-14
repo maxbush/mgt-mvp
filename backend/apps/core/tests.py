@@ -252,6 +252,38 @@ class ApiAuthTests(TestCase):
         r2 = c.post("/api/v1/months/2026-10/reopen", data={"reason": "тест"}, content_type="application/json")
         self.assertEqual(r2.status_code, 200)
 
+    def test_contract_duplicate_flat_409(self):
+        """Плоский POST /contracts/ тоже даёт 409 на дубле номера (а не 500)."""
+        c = self._login("admin", "admin123")
+        from apps.students.models import Student
+        from apps.dictionaries.models import AcademicYear
+        st = Student.objects.get(last_name="Лисовский")
+        y = AcademicYear.objects.get(name="2026/2027")
+        r = c.post("/api/v1/contracts/", data={
+            "student": str(st.id), "academic_year": str(y.id), "number": "04Э", "date": "2026-10-01", "status": "active",
+        }, content_type="application/json")
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertIn("занят", r.json()["error"]["message"])
+
+    def test_teacher_students_scoped(self):
+        """Реестр учеников для teacher ограничен его группами (как журнал)."""
+        c = self._login("teacher", "teacher123")
+        r = c.get("/api/v1/students/")
+        self.assertEqual(r.status_code, 200)
+        got = {s["id"] for s in r.json()["results"]}
+        self.assertLess(len(got), 25)
+        from apps.groups.models import Enrollment, Group
+        own = set(Group.objects.filter(code__in={"э1", "IT-1", "э2"}).values_list("id", flat=True))
+        expected = set(Enrollment.objects.filter(group_id__in=own, date_to__isnull=True).values_list("student_id", flat=True))
+        self.assertEqual(got, {str(x) for x in expected})
+
+    def test_validation_error_keeps_details(self):
+        c = self._login("admin", "admin123")
+        r = c.post("/api/v1/students/", data={"first_name": "Тест"}, content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["error"]
+        self.assertTrue(err["details"], err)
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

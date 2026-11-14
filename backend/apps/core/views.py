@@ -32,6 +32,10 @@ class LoginView(APIView):
         user = authenticate(request, username=s.validated_data["username"], password=s.validated_data["password"])
         if user is None or not user.is_active:
             audit(None, "auth", "user", meta={"event": "login_failed", "username": s.validated_data["username"]})
+            from axes.handlers.proxy import AxesProxyHandler
+
+            if AxesProxyHandler.is_locked(request, s.validated_data):
+                return Response({"error": {"code": "locked", "message": "Слишком много неудачных попыток: аккаунт временно заблокирован", "details": {}}}, status=403)
             return Response({"error": {"code": "invalid_credentials", "message": "Неверный логин или пароль", "details": {}}}, status=401)
         login(request, user)
         audit(user, "auth", "user", user.id, meta={"event": "login"})
@@ -61,6 +65,19 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         # MVP: без реальной отправки; в проде — через django.contrib.auth.tokens + email backend
         return Response({"ok": True, "message": "Если пользователь существует, письмо отправлено"})
+
+
+@extend_schema(request=OpenApiTypes.OBJECT, responses={501: OpenApiTypes.OBJECT})
+class PasswordResetConfirmView(APIView):
+    """Confirm не реализован в MVP: честный 501 вместо мнимого ok."""
+
+    permission_classes = [p.AllowAny]
+
+    def post(self, request):
+        return Response(
+            {"error": {"code": "not_implemented", "message": "Сброс пароля по ссылке не реализован: обратитесь к администратору", "details": {}}},
+            status=501,
+        )
 
 
 @extend_schema(responses={200: OpenApiTypes.OBJECT})

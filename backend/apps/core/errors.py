@@ -46,6 +46,11 @@ def exception_handler(exc, context):
     if resp is not None:
         code = getattr(exc, "default_code", "error")
         detail = resp.data
-        msg = detail.get("detail") if isinstance(detail, dict) else str(detail)
-        resp.data = _payload(code, msg if isinstance(msg, str) else "Ошибка")
+        if isinstance(detail, dict) and "detail" in detail:
+            resp.data = _payload(code, str(detail["detail"]))
+        elif isinstance(detail, dict):
+            # Ошибки по полям: {"last_name": ["Обязательное поле."]} — сохраняем в details.
+            resp.data = _payload(code, "Проверьте заполненные поля", details=detail)
+        else:
+            resp.data = _payload(code, str(detail) if detail else "Ошибка")
     return resp
