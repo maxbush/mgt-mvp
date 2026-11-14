@@ -1,0 +1,13 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+drf-spectacular>=0.28,<0.29
+django-filter>=25.1,<26
+django-cors-headers>=4.7,<5
+django-axes>=7.0,<9
+rapidfuzz>=3.13,<4
+openpyxl>=3.1.5,<4
+cryptography>=44,<46
+psycopg[binary]>=3.2,<4
+gunicorn>=23,<24
+python-dotenv>=1.0,<2
+requests>=2.32,<3

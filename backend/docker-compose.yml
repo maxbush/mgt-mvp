@@ -1,0 +1,59 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - media:/app/media
+    expose: ["8000"]
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-crm}
+      POSTGRES_USER: ${DB_USER:-crm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-crm}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-crm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - media:/app/media:ro
+      - staticfiles:/app/staticfiles:ro
+    depends_on: [app]
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16-alpine
+    volumes:
+      - backups:/backups
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-crm}
+    entrypoint: >
+      sh -c "while true; do
+        pg_dump -h db -U $${DB_USER:-crm} $${DB_NAME:-crm} | gzip > /backups/crm_$$(date +%F_%H%M).sql.gz;
+        find /backups -name 'crm_*.sql.gz' -mtime +30 -delete;
+        sleep 86400;
+      done"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  staticfiles:
+  backups:
