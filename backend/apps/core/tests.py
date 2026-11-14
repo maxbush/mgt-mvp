@@ -319,6 +319,23 @@ class ApiAuthTests(TestCase):
         r = c.patch(f"/api/v1/contracts/{con.id}/", data={"student": str(other.id)}, content_type="application/json")
         self.assertEqual(r.status_code, 409)
 
+    def test_accountant_can_manage_payments(self):
+        """finance.edit у accountant: confirm/reject платежей работает (parity с фронтом)."""
+        c = self._login("accountant", "account123")
+        from apps.finance.models import Payment
+        from apps.students.models import Student
+        p = Payment.objects.filter(status="pending").first()
+        st = Student.objects.first()
+        r = c.post(f"/api/v1/payments/{p.id}/confirm/", data={"student_id": str(st.id)}, content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_accountant_acts_edit_not_sign(self):
+        c = self._login("accountant", "account123")
+        from apps.staff.models import Act
+        act = Act.objects.first()
+        r = c.post(f"/api/v1/acts/{act.id}/sign/", content_type="application/json")
+        self.assertEqual(r.status_code, 403, r.content)
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

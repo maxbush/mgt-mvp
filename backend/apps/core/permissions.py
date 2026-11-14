@@ -6,7 +6,7 @@ from .models import RolePermission
 ALL_CODES = [
     "students.view", "students.edit", "students.delete", "groups.view", "groups.edit",
     "journal.view", "journal.edit", "finance.view", "finance.edit", "teachers.view",
-    "teachers.edit", "acts.view", "acts.sign", "settings.edit", "audit.view",
+    "teachers.edit", "acts.view", "acts.edit", "acts.sign", "settings.edit", "audit.view",
     "payments.import", "month.close", "documents.print", "payments.manage",
 ]
 
@@ -14,12 +14,13 @@ ROLE_DEFAULTS = {
     "admin": ALL_CODES,
     "teacher": ["journal.view", "journal.edit", "students.view", "groups.view", "documents.print"],
     "accountant": [
-        "students.view", "groups.view", "journal.view", "finance.view", "teachers.view",
-        "acts.view", "documents.print", "payments.manage", "payments.import", "month.close",
+        "students.view", "groups.view", "journal.view", "finance.view", "finance.edit",
+        "teachers.view", "acts.view", "acts.edit", "documents.print", "audit.view",
+        "payments.manage", "payments.import", "month.close",
     ],
     "director": [
         "students.view", "groups.view", "journal.view", "finance.view", "teachers.view",
-        "acts.view", "documents.print", "audit.view",
+        "acts.view", "acts.sign", "documents.print", "audit.view",
     ],
 }
 

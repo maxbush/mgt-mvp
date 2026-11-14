@@ -110,8 +110,13 @@ def enrollments_list(request):
 
 @api_view(["GET"])
 def membership_list(request):
-    """GET /membership — история членства (для гидрации)."""
-    qs = MembershipChange.objects.select_related("student", "from_group", "to_group", "created_by").all()[:2000]
+    """GET /membership — история членства (для гидрации). У teacher — только свои группы."""
+    qs = MembershipChange.objects.select_related("student", "from_group", "to_group", "created_by")
+    if request.user.role == "teacher" and request.user.teacher_id:
+        from django.db.models import Q
+        gids = teacher_group_ids(request.user)
+        qs = qs.filter(Q(from_group_id__in=gids) | Q(to_group_id__in=gids))
+    qs = qs.all()[:2000]
     return Response([{
         "id": m.id, "student": str(m.student_id), "kind": m.kind, "date": str(m.date),
         "from_group": str(m.from_group_id) if m.from_group_id else None,

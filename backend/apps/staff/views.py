@@ -25,12 +25,8 @@ class TeacherViewSet(viewsets.ModelViewSet):
         return TeacherSerializer if self.request.method == "GET" else TeacherWriteSerializer
 
     def get_serializer(self, *a, **kw):
-        """Преподаватель не видит чужие паспортные/банковские данные — маскируем."""
-        s = super().get_serializer(*a, **kw)
-        if self.request.method == "GET" and getattr(self.request.user, "role", None) == "teacher" and not has_code(self.request.user, "teachers.edit"):
-            # scope: свой профиль — можно, чужие — без чувствительных полей
-            pass
-        return s
+        """Маскировка чувствительных полей реализована в list/retrieve (SENSITIVE)."""
+        return super().get_serializer(*a, **kw)
 
     def list(self, request, *a, **kw):
         qs = self.filter_queryset(self.get_queryset())
@@ -69,10 +65,18 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
 
 class ActViewSet(viewsets.ModelViewSet):
-    required_code = "acts.sign"
+    required_code = "acts.edit"
     view_code = "acts.view"
     permission_classes = [HasCode]
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def check_permissions(self, request):
+        """sign/unsign — отдельное право acts.sign (директор/админ), остальные записи — acts.edit."""
+        if getattr(self, "action", None) in ("sign", "unsign"):
+            if not has_code(request.user, "acts.sign"):
+                self.permission_denied(request, message="Нет права acts.sign")
+            return
+        super().check_permissions(request)
 
     def get_serializer_class(self):
         return ActSerializer if self.request.method == "GET" else ActWriteSerializer

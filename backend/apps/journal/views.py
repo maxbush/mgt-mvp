@@ -162,7 +162,8 @@ def generate_lessons(request, group_id):
 @api_view(["GET"])
 def marks_map(request):
     """GET /marks?from&to&group — вся карта отметок {lessonId|studentId: status}."""
-    from .services import _ds
+    if not has_code(request.user, "journal.view"):
+        raise RoleScopeError("Нет права journal.view")
     qs = Attendance.objects.select_related("lesson")
     if request.query_params.get("group"):
         qs = qs.filter(lesson__group_id=request.query_params["group"])
