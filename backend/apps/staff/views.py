@@ -1,13 +1,15 @@
 from django.db import transaction
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.core.audit import audit, audit_delete, audit_save
 from apps.core.calc import act_amounts, rate_on
-from apps.core.errors import ConflictError, RoleScopeError
+from apps.core.errors import ConflictError, MonthClosedError, RoleScopeError
 from apps.core.permissions import HasCode, has_code
 from apps.dictionaries.models import ActRate, TaxRate
+from apps.finance.models import MonthClose
 
 from .models import Act, Teacher
 from .serializers import ActSerializer, ActWriteSerializer, TeacherSerializer, TeacherWriteSerializer
@@ -58,7 +60,10 @@ class TeacherViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def status(self, request, pk=None):
         obj = self.get_object()
-        obj.status = request.data.get("status", obj.status)
+        value = request.data.get("status", obj.status)
+        if value not in dict(Teacher.STATUS):
+            raise ValidationError(f"Недопустимый статус: {value}")
+        obj.status = value
         obj.save(update_fields=["status"])
         audit(request.user, "status", "staff.teacher", obj.pk, after={"status": obj.status})
         return Response(TeacherSerializer(obj).data)
@@ -105,6 +110,10 @@ class ActViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def sign(self, request, pk=None):
         obj = self.get_object()
+        if MonthClose.is_closed(obj.month):
+            raise MonthClosedError("Месяц закрыт — подпись акта запрещена")
+        if obj.status == "signed":
+            return Response(ActSerializer(obj).data)
         obj.status = "signed"
         obj.save(update_fields=["status"])
         audit(request.user, "act", "staff.act", obj.pk, after={"status": "signed"})
@@ -112,10 +121,7 @@ class ActViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def unsign(self, request, pk=None):
-        from apps.finance.models import MonthClose
-
         if MonthClose.is_closed(self.get_object().month):
-            from apps.core.errors import MonthClosedError
             raise MonthClosedError("Месяц закрыт — снятие подписи запрещено")
         obj = self.get_object()
         obj.status = "draft"
