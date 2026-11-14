@@ -369,6 +369,24 @@ class ApiAuthTests(TestCase):
             r = c.post(f"/api/v1/payments/{p.id}/{action}/", data=data, content_type="application/json")
             self.assertEqual(r.status_code, 409, (action, r.content))
 
+    def test_split_validates_parts(self):
+        c = self._login("accountant", "account123")
+        from apps.finance.models import Payment
+        from apps.students.models import Student
+        p = Payment.objects.filter(status="pending").first()
+        st = Student.objects.first()
+        r = c.post(f"/api/v1/payments/{p.id}/split/", data={"parts": [{"amount": "1"}, {"student_id": str(st.id), "amount": "1"}]}, content_type="application/json")
+        self.assertEqual(r.status_code, 400, r.content)
+        r = c.post(f"/api/v1/payments/{p.id}/split/", data={"parts": [{"student_id": str(st.id), "amount": "-5"}, {"student_id": str(st.id), "amount": "9999"}]}, content_type="application/json")
+        self.assertEqual(r.status_code, 409, r.content)
+
+    def test_payment_negative_amount_400(self):
+        c = self._login("accountant", "account123")
+        from apps.students.models import Student
+        st = Student.objects.first()
+        r = c.post("/api/v1/payments/", data={"student": str(st.id), "date": "2026-10-22", "amount": "-10", "method": "cash", "status": "confirmed"}, content_type="application/json")
+        self.assertEqual(r.status_code, 400, r.content)
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

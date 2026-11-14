@@ -30,6 +30,11 @@ class PaymentWriteSerializer(serializers.ModelSerializer):
         model = Payment
         fields = ["id", "student", "date", "amount", "method", "status", "payer", "ext_id", "note", "comment"]
 
+    def validate_amount(self, v):
+        if v <= 0:
+            raise serializers.ValidationError("Сумма платежа должна быть положительной")
+        return v
+
 
 class AdjustmentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student", read_only=True)

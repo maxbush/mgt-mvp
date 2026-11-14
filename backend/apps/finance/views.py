@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -88,7 +89,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             ext = line[3].strip() if len(line) > 3 else ""
             try:
                 _date.fromisoformat(d)
-                float(amount)
+                if float(amount) <= 0:
+                    raise ValueError
             except ValueError:
                 if i == 0:  # вероятно заголовок
                     continue
@@ -157,7 +159,20 @@ class PaymentViewSet(viewsets.ModelViewSet):
         parts = request.data.get("parts", [])
         if len(parts) < 2:
             raise ConflictError("Сплит: нужно минимум две части")
-        total_k = sum(to_k(x["amount"]) for x in parts)
+        ids = set()
+        for x in parts:
+            if not isinstance(x, dict) or "student_id" not in x or "amount" not in x:
+                raise ValidationError("Каждая часть: {student_id, amount}")
+            ids.add(str(x["student_id"]))
+        valid = Student.objects.filter(id__in=ids).count()
+        if valid != len(ids):
+            raise ValidationError("Сплит: в списке есть несуществующий ученик")
+        total_k = 0
+        for x in parts:
+            k = to_k(x["amount"])
+            if k <= 0:
+                raise ConflictError("Сплит: сумма части должна быть положительной")
+            total_k += k
         if total_k != to_k(p.amount):
             raise ConflictError(f"Сумма частей ({from_k(total_k)}) не равна сумме платежа ({p.amount})")
         with transaction.atomic():
