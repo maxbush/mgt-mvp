@@ -387,6 +387,13 @@ class ApiAuthTests(TestCase):
         r = c.post("/api/v1/payments/", data={"student": str(st.id), "date": "2026-10-22", "amount": "-10", "method": "cash", "status": "confirmed"}, content_type="application/json")
         self.assertEqual(r.status_code, 400, r.content)
 
+    def test_delete_protected_teacher_409(self):
+        c = self._login("admin", "admin123")
+        from apps.staff.models import Act
+        teacher_id = Act.objects.first().teacher_id
+        r = c.delete(f"/api/v1/teachers/{teacher_id}/")
+        self.assertEqual(r.status_code, 409, r.content)
+
     def test_journal_payload_shape(self):
         c = self._login("admin", "admin123")
         from apps.groups.models import Group

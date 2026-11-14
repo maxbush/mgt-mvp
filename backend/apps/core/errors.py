@@ -1,5 +1,6 @@
 """Единый формат ошибок API (п. 7.4 ТЗ): {"error":{code,message,details}}."""
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import ProtectedError, RestrictedError
 from django.http import Http404
 from rest_framework import exceptions, status
 from rest_framework.response import Response
@@ -40,6 +41,8 @@ def exception_handler(exc, context):
         return Response(_payload(exc.code, exc.message, exc.details), status=exc.status_code)
     if isinstance(exc, Http404):
         return Response(_payload("not_found", "Объект не найден"), status=404)
+    if isinstance(exc, (ProtectedError, RestrictedError)):
+        return Response(_payload("conflict", "Объект используется и не может быть удалён"), status=409)
     if isinstance(exc, DjangoValidationError):
         return Response(_payload("validation", "; ".join(exc.messages)), status=400)
     resp = drf_handler(exc, context)
