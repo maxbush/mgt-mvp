@@ -8,7 +8,7 @@ class ContractSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contract
-        fields = ["id", "student", "academic_year", "academic_year_name", "number", "date", "status", "comment"]
+        fields = ["id", "student", "academic_year", "academic_year_name", "number", "date", "status", "closed_at", "comment"]
         read_only_fields = ["student"]
 
 
@@ -21,9 +21,9 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            "id", "last_name", "first_name", "middle_name", "full_name", "birth_date", "grade",
-            "school", "parent_name", "parent_phone", "parent_email", "comment", "status",
-            "opening_balance", "created_at", "contracts", "groups", "balance",
+            "id", "last_name", "first_name", "middle_name", "full_name", "birth_date", "birth_year", "grade",
+            "school", "parent_name", "parent_phone", "parent_phone2", "parent_email", "comment", "status",
+            "opening_balance", "branch", "created_at", "contracts", "groups", "balance",
         ]
 
     def get_full_name(self, o):
@@ -44,6 +44,6 @@ class StudentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            "id", "last_name", "first_name", "middle_name", "birth_date", "grade", "school",
-            "parent_name", "parent_phone", "parent_email", "comment", "status", "opening_balance",
+            "id", "last_name", "first_name", "middle_name", "birth_date", "birth_year", "grade", "school",
+            "parent_name", "parent_phone", "parent_phone2", "parent_email", "comment", "status", "opening_balance",
         ]

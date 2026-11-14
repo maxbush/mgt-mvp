@@ -77,9 +77,9 @@ function GenerateDialog({ open, onOpenChange, month }: { open: boolean; onOpenCh
           <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
           <Button
             disabled={!toCreate.length || rateNum <= 0}
-            onClick={() => {
+            onClick={async () => {
               const s = state.signers.find((x) => x.name === signer.name) ?? state.signers[0];
-              const n = generateActs(month, rateNum, s.id);
+              const n = await generateActs(month, rateNum, s.id);
               toast.success(`Сформировано ${plural(n, "акт", "акта", "актов")}`, { description: monthLabel(month) });
               onOpenChange(false);
             }}

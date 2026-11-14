@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { ShieldAlert } from "lucide-react";
+import { useEffect } from "react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { can } from "@/lib/rbac";
 import type { Permission } from "@/lib/types";
@@ -19,6 +20,7 @@ import { PaymentsPage } from "@/pages/finance/payments-page";
 import { AddendumsPage } from "@/pages/documents/addendums-page";
 import { SettingsPage } from "@/pages/system/settings-page";
 import { AuditPage } from "@/pages/system/audit-page";
+import { LoginPage } from "@/pages/auth/login-page";
 
 function Guard({ permission, children }: { permission: Permission; children: React.ReactNode }) {
   const role = useAppStore((s) => s.role);
@@ -37,6 +39,24 @@ function Guard({ permission, children }: { permission: Permission; children: Rea
 }
 
 export default function App() {
+  const dataMode = useAppStore((s) => s.dataMode);
+  const authed = useAppStore((s) => s.authed);
+  const booted = useAppStore((s) => s.booted);
+  const bootstrap = useAppStore((s) => s.bootstrap);
+
+  useEffect(() => {
+    if (!booted) void bootstrap();
+  }, [booted, bootstrap]);
+
+  if (dataMode === "api" && !booted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        <Loader2 className="mr-2 size-5 animate-spin" /> Загрузка…
+      </div>
+    );
+  }
+  if (dataMode === "api" && !authed) return <LoginPage />;
+
   return (
     <HashRouter>
       <Routes>

@@ -12,6 +12,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             "id", "last_name", "first_name", "middle_name", "full_name", "phone", "email",
             "status", "passport_series", "passport_number", "passport_issued", "passport_date",
             "personal_number", "iban", "bank_name", "bank_bic", "address_reg",
+            "contract_number", "contract_date", "subjects", "rate",
         ]
 
     def get_full_name(self, o):
@@ -25,6 +26,7 @@ class TeacherWriteSerializer(serializers.ModelSerializer):
             "id", "last_name", "first_name", "middle_name", "phone", "email", "status",
             "passport_series", "passport_number", "passport_issued", "passport_date",
             "personal_number", "iban", "bank_name", "bank_bic", "address_reg",
+            "contract_number", "contract_date", "subjects", "rate",
         ]
 
 

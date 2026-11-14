@@ -36,14 +36,14 @@ export function EnrollmentsCard({ studentId, canEdit }: { studentId: string; can
     .filter((g) => g.status === "active" && !(dlg && dlg.kind === "move" && g.id === dlg.groupId))
     .map((g) => ({ value: g.id, label: `${g.code} · ${branchById(state, g.branchId)?.shortName}` }));
 
-  const submit = () => {
+  const submit = async () => {
     if (!dlg) return;
     if (dlg.kind === "enroll") {
       if (state.enrollments.some((e) => e.studentId === studentId && e.groupId === groupId && !e.to)) return toast.error("Ученик уже зачислен в эту группу");
       state.addStudentsToGroup(groupId, [studentId], date);
       toast.success("Ученик зачислен", { description: `${groupById(state, groupId)?.name} · с ${formatDate(date)}` });
     } else if (dlg.kind === "move") {
-      const r = state.transferStudent(studentId, dlg.groupId, groupId, date);
+      const r = await state.transferStudent(studentId, dlg.groupId, groupId, date);
       if (!r.ok) return toast.error("Перевод не выполнен", { description: r.reason });
       toast.success("Перевод выполнен", { description: "Старая запись закрыта днём раньше, история посещаемости сохранена" });
     } else {
@@ -146,10 +146,10 @@ export function LedgerCard({ studentId, canEdit }: { studentId: string; canEdit:
   const rows = (month === "all" ? all : all.filter((e) => e.date.startsWith(month))).slice().reverse();
   const TYPE = { open: ["начальный", "bg-muted text-muted-foreground"], pay: ["платёж", "bg-success/15 text-success"], adj: ["коррект.", "bg-warning/20 text-amber-700 dark:text-amber-300"], charge: ["списание", "bg-info/15 text-info"] } as const;
 
-  const add = () => {
+  const add = async () => {
     const a = parseMoney(amount);
     if (Number.isNaN(a)) return setErr("Введите сумму числом, например −15,00 или 30,00.");
-    const r = state.addAdjustment({ studentId, date, amount: a, comment });
+    const r = await state.addAdjustment({ studentId, date, amount: a, comment });
     if (!r.ok) return setErr(r.reason);
     setErr("");
     setAmount("");
@@ -190,7 +190,7 @@ export function LedgerCard({ studentId, canEdit }: { studentId: string; canEdit:
                   <TableCell className="text-right"><Money value={e.run / 100} colored /></TableCell>
                   <TableCell className="pr-4">
                     {e.type === "adj" && canEdit && (
-                      <Button variant="ghost" size="icon-xs" aria-label="Удалить корректировку" onClick={() => { const r = state.removeAdjustment(e.ref!); if (!r.ok) toast.error("Нельзя удалить", { description: r.reason }); else toast.success("Корректировка удалена"); }}>
+                      <Button variant="ghost" size="icon-xs" aria-label="Удалить корректировку" onClick={async () => { const r = await state.removeAdjustment(e.ref!); if (!r.ok) toast.error("Нельзя удалить", { description: r.reason }); else toast.success("Корректировка удалена"); }}>
                         <Trash2 className="text-destructive" />
                       </Button>
                     )}

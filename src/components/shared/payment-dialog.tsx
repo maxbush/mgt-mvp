@@ -63,9 +63,9 @@ export function PaymentDialog({
   const valid = !!student && parsed > 0 && !!date;
   const candidates = branchId ? state.students.filter((s) => s.branchId === branchId || state.groups.some((g) => g.branchId === branchId && groupStudentIds(state, g.id).includes(s.id))) : undefined;
 
-  const submit = () => {
+  const submit = async () => {
     if (!valid || !student) return;
-    const res = addPayment({ studentId: student.id, amount: Math.round(parsed * 100) / 100, date, method, comment: comment || undefined, payer: fullName(student) });
+    const res = await addPayment({ studentId: student.id, amount: Math.round(parsed * 100) / 100, date, method, comment: comment || undefined, payer: fullName(student) });
     if (!res.ok) {
       toast.error("Платёж не внесён", { description: res.reason });
       return;

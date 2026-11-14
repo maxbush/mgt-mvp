@@ -97,6 +97,9 @@ function UserMenu() {
   const teacherId = useAppStore((s) => s.teacherId);
   const teachers = useAppStore((s) => s.teachers);
   const setRole = useAppStore((s) => s.setRole);
+  const dataMode = useAppStore((s) => s.dataMode);
+  const logout = useAppStore((s) => s.logout);
+  const setDataMode = useAppStore((s) => s.setDataMode);
   const navigate = useNavigate();
   return (
     <DropdownMenu>
@@ -114,32 +117,42 @@ function UserMenu() {
           </div>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Демо: переключить роль</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={role === "teacher" ? `teacher:${teacherId}` : role}
-          onValueChange={(v) => {
-            if (v.startsWith("teacher:")) setRole("teacher", v.slice(8));
-            else setRole(v as Role);
-            navigate(v.startsWith("teacher:") ? "/journal" : "/");
-          }}
-        >
-          {(["admin", "accountant"] as Role[]).map((r) => (
-            <DropdownMenuRadioItem key={r} value={r}>
-              <ShieldCheck className="mr-2 size-4 text-muted-foreground" />
-              {ROLE_LABELS[r]}
-            </DropdownMenuRadioItem>
-          ))}
-          {teachers.filter((t) => t.status === "active").map((t) => (
-            <DropdownMenuRadioItem key={t.id} value={`teacher:${t.id}`}>
-              <ShieldCheck className="mr-2 size-4 text-muted-foreground" />
-              Преподаватель · {t.lastName} {t.firstName[0]}.{t.middleName ? `${t.middleName[0]}.` : ""}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <LogOut /> Выйти
-        </DropdownMenuItem>
+        {dataMode === "demo" && (
+          <>
+            <DropdownMenuLabel>Демо: переключить роль</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={role === "teacher" ? `teacher:${teacherId}` : role}
+              onValueChange={(v) => {
+                if (v.startsWith("teacher:")) setRole("teacher", v.slice(8));
+                else setRole(v as Role);
+                navigate(v.startsWith("teacher:") ? "/journal" : "/");
+              }}
+            >
+              {(["admin", "accountant"] as Role[]).map((r) => (
+                <DropdownMenuRadioItem key={r} value={r}>
+                  <ShieldCheck className="mr-2 size-4 text-muted-foreground" />
+                  {ROLE_LABELS[r]}
+                </DropdownMenuRadioItem>
+              ))}
+              {teachers.filter((t) => t.status === "active").map((t) => (
+                <DropdownMenuRadioItem key={t.id} value={`teacher:${t.id}`}>
+                  <ShieldCheck className="mr-2 size-4 text-muted-foreground" />
+                  Преподаватель · {t.lastName} {t.firstName[0]}.{t.middleName ? `${t.middleName[0]}.` : ""}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {dataMode === "api" ? (
+          <DropdownMenuItem onClick={() => void logout()}>
+            <LogOut /> Выйти
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onClick={() => void setDataMode("api")}>
+            <LogOut /> Подключить к серверу…
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

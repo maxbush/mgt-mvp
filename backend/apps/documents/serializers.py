@@ -9,5 +9,5 @@ class AddendumSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Addendum
-        fields = ["id", "contract", "contract_number", "student_name", "number", "date", "template", "body", "created_at"]
+        fields = ["id", "contract", "contract_number", "student_name", "number", "date", "template", "clause", "signer", "body", "created_at"]
         read_only_fields = ["created_at"]

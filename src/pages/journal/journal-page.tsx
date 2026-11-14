@@ -402,9 +402,9 @@ export function JournalPage() {
                   <Button
                     className="mt-3 w-full"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (state.settings.closedMonths.includes(newDate.slice(0, 7))) return toast.error("Месяц закрыт", { description: "Добавлять занятия в закрытый месяц нельзя. Откройте месяц в «Ведомостях оплат»." });
-                      const id = addLesson(group.id, newDate);
+                      const id = await addLesson(group.id, newDate);
                       if (!id) return toast.error("Занятие на эту дату уже есть");
                       toast.success(`Добавлено занятие ${formatDate(newDate)}`);
                       if (!newDate.startsWith(month)) setParam("month", newDate.slice(0, 7));
@@ -418,9 +418,9 @@ export function JournalPage() {
                     size="sm"
                     variant="outline"
                     disabled={!suggestedDates.length}
-                    onClick={() => {
+                    onClick={async () => {
                       if (state.settings.closedMonths.includes(month)) return toast.error("Месяц закрыт", { description: "Откройте месяц, чтобы добавить занятия." });
-                      const n = generateMonthLessons(group.id, month);
+                      const n = await generateMonthLessons(group.id, month);
                       toast.success(n ? `Добавлено занятий по расписанию: ${n}` : "Все занятия по расписанию уже созданы");
                       setAddOpen(false);
                     }}

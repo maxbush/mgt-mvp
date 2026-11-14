@@ -11,6 +11,8 @@ class Addendum(models.Model):
     number = models.CharField(max_length=32)
     date = models.DateField()
     template = models.ForeignKey("dictionaries.AddendumTemplate", null=True, blank=True, on_delete=models.SET_NULL)
+    clause = models.CharField(max_length=128, blank=True)
+    signer = models.ForeignKey("dictionaries.Signer", null=True, blank=True, on_delete=models.SET_NULL)
     body = models.TextField()  # итоговый текст после подстановки
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey("core.User", null=True, blank=True, on_delete=models.SET_NULL)

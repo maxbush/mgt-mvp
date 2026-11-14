@@ -157,3 +157,19 @@ def generate_lessons(request, group_id):
             d += timedelta(days=1)
         audit(request.user, "generate", "journal.lesson", meta={"group": g.code, "month": month, "created": len(created)})
     return Response({"created": len(created), "dates": created})
+
+
+@api_view(["GET"])
+def marks_map(request):
+    """GET /marks?from&to&group — вся карта отметок {lessonId|studentId: status}."""
+    from .services import _ds
+    qs = Attendance.objects.select_related("lesson")
+    if request.query_params.get("group"):
+        qs = qs.filter(lesson__group_id=request.query_params["group"])
+    if request.query_params.get("from"):
+        qs = qs.filter(lesson__date__gte=request.query_params["from"])
+    if request.query_params.get("to"):
+        qs = qs.filter(lesson__date__lte=request.query_params["to"])
+    if request.user.role == "teacher" and request.user.teacher_id:
+        qs = qs.filter(lesson__group_id__in=teacher_group_ids(request.user))
+    return Response({f"{m.lesson_id}|{m.student_id}": m.status for m in qs})

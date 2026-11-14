@@ -28,11 +28,14 @@ class AuditSerializer(serializers.ModelSerializer):
         fields = ["id", "at", "user", "user_name", "action", "entity", "entity_id", "before", "after", "meta"]
 
     def get_user_name(self, o):
-        return o.user.get_full_name() or (o.user.username if o.user_id else "система")
+        if not o.user_id or o.user is None:
+            return "система"
+        return o.user.get_full_name() or o.user.username
 
 
 def me_payload(user):
     """Ответ /auth/me: юзер, роль, права, scope преподавателя, окружение."""
+    from apps.core.dates import server_today
     from apps.dictionaries.models import AcademicYear
     from apps.finance.models import MonthClose
 
@@ -42,7 +45,7 @@ def me_payload(user):
         "role": g.name if g else user.role,
         "permissions": sorted(user_codes(user)),
         "teacher_id": str(user.teacher_id) if user.teacher_id else None,
-        "server_date": str(__import__("django.utils.timezone", fromlist=["localdate"]).localdate()),
+        "server_date": str(server_today()),
         "current_academic_year": AcademicYearSerializer(AcademicYear.current()).data if AcademicYear.current() else None,
         "closed_months": list(MonthClose.objects.filter(reopened_at__isnull=True).values_list("month", flat=True)),
     }

@@ -25,6 +25,10 @@ class Teacher(models.Model):
     bank_name = models.CharField(max_length=128, blank=True)
     bank_bic = models.CharField(max_length=16, blank=True)
     address_reg = EncryptedTextField(blank=True)
+    contract_number = models.CharField(max_length=32, blank=True)
+    contract_date = models.DateField(null=True, blank=True)
+    subjects = models.JSONField(default=list, blank=True)
+    rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["last_name", "first_name"]

@@ -70,9 +70,9 @@ function SplitDialog({ payment, onClose }: { payment: Payment | null; onClose: (
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Отмена</Button>
           <Button
-            onClick={() => {
+            onClick={async () => {
               if (!payment) return;
-              const r = state.splitPayment(payment.id, rows.map((x) => ({ studentId: x.sid, amount: Number.isNaN(parseMoney(x.amount)) ? 0 : parseMoney(x.amount) })));
+              const r = await state.splitPayment(payment.id, rows.map((x) => ({ studentId: x.sid, amount: Number.isNaN(parseMoney(x.amount)) ? 0 : parseMoney(x.amount) })));
               if (!r.ok) return setErr(r.reason);
               toast.success("Платёж разделён между учениками");
               onClose();
@@ -97,8 +97,8 @@ function QueueCard({ p, canEdit, onSplit, onReject }: { p: Payment; canEdit: boo
   const found = q
     ? state.students.filter((s) => normName(fullName(s)).includes(normName(q)) || normName(s.parentName).includes(normName(q))).slice(0, 5)
     : [];
-  const confirm = (sid: string) => {
-    const r = state.confirmPayment(p.id, sid);
+  const confirm = async (sid: string) => {
+    const r = await state.confirmPayment(p.id, sid);
     if (!r.ok) return toast.error("Нельзя сопоставить", { description: r.reason });
     const st = studentById(state, sid)!;
     toast.success(`Платёж ${formatMoney(p.amount)} зачислен`, { description: fullName(st) });
@@ -171,8 +171,8 @@ export function PaymentsPage() {
   const month = state.settings.today.slice(0, 7);
   const income = all.filter((p) => p.status === "confirmed" && p.date.startsWith(month)).reduce((a, p) => a + toK(p.amount), 0) / 100;
 
-  const run = (csv: string) => {
-    const r = state.importStatement(csv);
+  const run = async (csv: string) => {
+    const r = await state.importStatement(csv);
     setResult(r);
     setParams(new URLSearchParams({ tab: "all" }), { replace: true });
     toast.success(`Выписка: загружено ${r.loaded}`, { description: `автоматически ${r.auto} · в очередь ${r.queued} · дублей ${r.dups}` });
@@ -296,7 +296,7 @@ export function PaymentsPage() {
                         ) : closed ? (
                           <Badge variant="muted" className="gap-1"><Lock className="size-3" /></Badge>
                         ) : (
-                          canEdit && p.status === "rejected" && <Button size="xs" variant="ghost" onClick={() => { const r = state.requeuePayment(p.id); if (!r.ok) toast.error("Нельзя", { description: r.reason }); }}>В очередь</Button>
+                          canEdit && p.status === "rejected" && <Button size="xs" variant="ghost" onClick={async () => { const r = await state.requeuePayment(p.id); if (!r.ok) toast.error("Нельзя", { description: r.reason }); }}>В очередь</Button>
                         )}
                       </TableCell>
                     </TableRow>
@@ -319,9 +319,9 @@ export function PaymentsPage() {
         description="Платёж не попадёт в остатки учеников. Его можно вернуть в очередь позже."
         confirmLabel="Отклонить"
         destructive
-        onConfirm={() => {
+        onConfirm={async () => {
           if (reject) {
-            const r = state.rejectPayment(reject.id);
+            const r = await state.rejectPayment(reject.id);
             if (!r.ok) toast.error("Нельзя отклонить", { description: r.reason });
             else toast.success("Платёж отклонён");
           }

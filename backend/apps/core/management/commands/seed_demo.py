@@ -115,6 +115,7 @@ class Command(BaseCommand):
                   Enrollment, Act, Contract, Student, GroupPrice, Group, Teacher, StatementSheet,
                   AddendumTemplate, Signer, ActRate, ChargePolicy, TaxRate, AcademicYear, Branch, Direction):
             m.objects.all().delete()
+        User.objects.filter(is_superuser=False).delete()
 
     def _seed(self):
         # --- роли/права ---
@@ -125,12 +126,12 @@ class Command(BaseCommand):
 
         # --- справочники ---
         branches = {}
-        for bid, name, addr in [
-            ("b_kolod", "Колодищанская СШ №2", "Минский р-н, аг. Колодищи, ул. Школьная, д.2"),
-            ("b_part", "Партизанский пр-т, 8", "г. Минск, Партизанский пр-т, д.8"),
-            ("b_gym32", "ГУО Гимназия №32 г. Минска", "г. Минск, ул. Нестерова, д.32"),
+        for bid, name, short, addr, color in [
+            ("b_kolod", "Колодищанская СШ №2", "Колодищи", "Минский р-н, аг. Колодищи, ул. Школьная, д.2", "#6366f1"),
+            ("b_part", "Партизанский пр-т, 8", "Партизанский, 8", "г. Минск, Партизанский пр-т, д.8", "#10b981"),
+            ("b_gym32", "ГУО Гимназия №32 г. Минска", "Гимназия 32", "г. Минск, ул. Нестерова, д.32", "#f59e0b"),
         ]:
-            branches[bid] = Branch.objects.create(name=name, address=addr)
+            branches[bid] = Branch.objects.create(name=name, short_name=short, address=addr, color=color)
 
         directions = {}
         for code, name in [("electronics", "Электроника"), ("robotics", "Робототехника"), ("it", "IT"), ("other", "Другое")]:
@@ -160,13 +161,13 @@ class Command(BaseCommand):
 
         # --- преподаватели ---
         tdefs = [
-            ("t1", "Козловский", "Андрей", "Петрович", 1, "active", "BY11ALFA30140000000000000001", "Партизанским РУВД г. Минска"),
-            ("t2", "Мартынова", "Ольга", "Сергеевна", 2, "active", "BY12ALFA30140000000000000002", "Московским РУВД г. Минска"),
-            ("t3", "Шевцов", "Дмитрий", "Игоревич", 3, "active", "BY13PJCB30140000000000000003", "Заводским РУВД г. Минска"),
-            ("t4", "Крупеня", "Игорь", "Валерьевич", 4, "inactive", "BY14ALFA30140000000000000004", "Партизанским РУВД г. Минска"),
+            ("t1", "Козловский", "Андрей", "Петрович", 1, "active", "BY11ALFA30140000000000000001", "Партизанским РУВД г. Минска", ["Юный электронщик", "IT-класс"]),
+            ("t2", "Мартынова", "Ольга", "Сергеевна", 2, "active", "BY12ALFA30140000000000000002", "Московским РУВД г. Минска", ["Юный электронщик", "Робототехника"]),
+            ("t3", "Шевцов", "Дмитрий", "Игоревич", 3, "active", "BY13PJCB30140000000000000003", "Заводским РУВД г. Минска", ["Робототехника"]),
+            ("t4", "Крупеня", "Игорь", "Валерьевич", 4, "inactive", "BY14ALFA30140000000000000004", "Партизанским РУВД г. Минска", ["Юный электронщик"]),
         ]
         teachers = {}
-        for tid, ln, fn, mn, n, status, iban, issued in tdefs:
+        for tid, ln, fn, mn, n, status, iban, issued, subjects in tdefs:
             teachers[tid] = Teacher.objects.create(
                 last_name=ln, first_name=fn, middle_name=mn,
                 phone=f"+37529555020{n}", email=f"t{n}@example.test", status=status,
@@ -175,6 +176,9 @@ class Command(BaseCommand):
                 bank_name="ЗАО «АЛЬФА-БАНК»" if n != 3 else "ОАО «Приорбанк»",
                 bank_bic="ALFABY2X" if n != 3 else "PJCBBY2X",
                 address_reg=f"г. Минск, ул. Условная, д.{n * 7}, кв. {n * 11}",
+                contract_number="14/26" if n == 2 else "б/н",
+                contract_date="2026-09-10" if n == 4 else "2026-09-01",
+                subjects=subjects, rate=DEMO_RATE,
             )
 
         # --- группы ---
@@ -202,10 +206,12 @@ class Command(BaseCommand):
                 parent_name=parent, parent_phone=f"+3752955501{i + 1:02d}",
             )
             students[sid] = s
+            Student.objects.filter(pk=s.pk).update(created_at=f"{cdate}T10:00:00+03:00")
             Contract.objects.create(student=s, academic_year=ay, number=no, date=cdate,
-                                    status="active" if active else "terminated")
+                                    status="active" if active else "terminated",
+                                    closed_at=None if active else "2026-09-25")
             if sid == "s07":
-                Contract.objects.create(student=s, academic_year=ay_old, number="12э", date="2025-09-20", status="closed")
+                Contract.objects.create(student=s, academic_year=ay_old, number="12э", date="2025-09-20", status="closed", closed_at="2026-05-31")
             for k, (gid, frm, to) in enumerate(enr):
                 frm = frm or "2026-09-07"
                 Enrollment.objects.create(student=s, group=groups[gid], date_from=frm, date_to=to)

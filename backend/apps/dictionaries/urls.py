@@ -14,3 +14,7 @@ router.register("charge-policies", views.ChargePolicyViewSet, basename="charge-p
 router.register("tax-rates", views.TaxRateViewSet, basename="tax-rate")
 
 urlpatterns = router.urls
+
+from django.urls import path as _p
+
+urlpatterns += [_p("settings/", views.SettingsView.as_view({"get": "list", "patch": "partial_update"}))]

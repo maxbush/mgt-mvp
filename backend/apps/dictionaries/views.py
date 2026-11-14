@@ -93,16 +93,19 @@ from rest_framework import viewsets as _vs
 
 
 class SettingsView(_vs.ViewSet):
-    """GET/PATCH /settings/ — оперативные настройки (SystemSetting)."""
+    """GET/PATCH /settings/ — оперативные настройки (SystemSetting). GET — всем, PATCH — settings.edit."""
 
-    required_code = "settings.edit"
-    permission_classes = [HasCode]
+    permission_classes = []
 
     def list(self, request):
         return Response({s.key: s.value for s in SystemSetting.objects.all()})
 
     @transaction.atomic
     def partial_update(self, request, pk=None):
+        from apps.core.permissions import has_code
+        if not has_code(request.user, "settings.edit"):
+            from apps.core.errors import RoleScopeError
+            raise RoleScopeError("Нет права settings.edit")
         for k, v in request.data.items():
             SystemSetting.set(k, v)
         audit(request.user, "settings", "system_setting", after=request.data)

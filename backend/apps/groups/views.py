@@ -97,3 +97,26 @@ def transfer_enrollment(request):
         "kind": "transfer", "student": str(st.id), "from": g_from.code, "to": g_to.code,
     })
     return Response(EnrollmentSerializer(en).data, status=201)
+
+
+@api_view(["GET"])
+def enrollments_list(request):
+    """GET /enrollments — все зачисления (для гидрации клиента)."""
+    qs = Enrollment.objects.select_related("student", "group").all()
+    if request.query_params.get("group"):
+        qs = qs.filter(group_id=request.query_params["group"])
+    if request.query_params.get("student"):
+        qs = qs.filter(student_id=request.query_params["student"])
+    return Response(EnrollmentSerializer(qs[:2000], many=True).data)
+
+
+@api_view(["GET"])
+def membership_list(request):
+    """GET /membership — история членства (для гидрации)."""
+    qs = MembershipChange.objects.select_related("student", "from_group", "to_group", "created_by").all()[:2000]
+    return Response([{
+        "id": m.id, "student": str(m.student_id), "kind": m.kind, "date": str(m.date),
+        "from_group": str(m.from_group_id) if m.from_group_id else None,
+        "to_group": str(m.to_group_id) if m.to_group_id else None,
+        "by": (m.created_by.get_full_name() or m.created_by.username) if m.created_by_id else None,
+    } for m in qs])

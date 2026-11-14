@@ -16,6 +16,10 @@ import {
 import { toK } from "./calc";
 import { parseStatement } from "./bepaid";
 import { formatDate, formatMoney, fullName, monthGenitive, monthLabel, shortName, uid } from "./utils";
+import { api as apiClient, csrfInit, hydrate, me, type MePayload } from "./api";
+import { makeApiActions } from "./api-actions";
+
+const apiPost = <T,>(p: string, b: unknown) => apiClient.post<T>(p, b);
 
 export type Theme = "light" | "dark" | "system";
 export type Result = { ok: true } | { ok: false; reason: string };
@@ -58,30 +62,30 @@ interface Actions {
   upsertGroup: (group: Group) => void;
   addStudentsToGroup: (groupId: string, studentIds: string[], from?: string) => void;
   removeStudentFromGroup: (groupId: string, studentId: string, lastDay?: string) => void;
-  transferStudent: (studentId: string, fromGroupId: string, toGroupId: string, date: string) => Result;
+  transferStudent: (studentId: string, fromGroupId: string, toGroupId: string, date: string) => Maybe<Result>;
 
-  addLesson: (groupId: string, date: string) => string | null;
-  generateMonthLessons: (groupId: string, month: string) => number;
+  addLesson: (groupId: string, date: string) => Maybe<string | null>;
+  generateMonthLessons: (groupId: string, month: string) => Maybe<number>;
   removeLesson: (lessonId: string) => void;
   setSubstitute: (lessonId: string, teacherId: string | null) => void;
   setCancelled: (lessonId: string, cancelled: boolean) => void;
   setAttendance: (lessonId: string, studentId: string, status: AttendanceStatus | null) => void;
   setAttendanceBulk: (lessonId: string, studentIds: string[], status: AttendanceStatus | null) => void;
 
-  addPayment: (p: { studentId: string | null; date: string; amount: number; method: PaymentMethod; comment?: string; payer?: string }) => Result;
-  deletePayment: (id: string) => Result;
-  importStatement: (csv: string) => ImportResult;
-  confirmPayment: (id: string, studentId: string) => Result;
-  splitPayment: (id: string, parts: { studentId: string; amount: number }[]) => Result;
-  rejectPayment: (id: string, note?: string) => Result;
-  requeuePayment: (id: string) => Result;
-  addAdjustment: (a: { studentId: string; date: string; amount: number; comment: string }) => Result;
-  removeAdjustment: (id: string) => Result;
+  addPayment: (p: { studentId: string | null; date: string; amount: number; method: PaymentMethod; comment?: string; payer?: string }) => Maybe<Result>;
+  deletePayment: (id: string) => Maybe<Result>;
+  importStatement: (csv: string) => Maybe<ImportResult>;
+  confirmPayment: (id: string, studentId: string) => Maybe<Result>;
+  splitPayment: (id: string, parts: { studentId: string; amount: number }[]) => Maybe<Result>;
+  rejectPayment: (id: string, note?: string) => Maybe<Result>;
+  requeuePayment: (id: string) => Maybe<Result>;
+  addAdjustment: (a: { studentId: string; date: string; amount: number; comment: string }) => Maybe<Result>;
+  removeAdjustment: (id: string) => Maybe<Result>;
 
   upsertTeacher: (t: Teacher) => void;
   setTeacherStatus: (id: string, status: EntityStatus) => void;
 
-  generateActs: (month: string, rate: number, signerId: string) => number;
+  generateActs: (month: string, rate: number, signerId: string) => Maybe<number>;
   updateAct: (id: string, patch: Partial<Act>) => void;
   deleteAct: (id: string) => void;
 
@@ -94,7 +98,34 @@ interface Actions {
   addAddendum: (a: Omit<Addendum, "id" | "createdAt">) => void;
 }
 
-export type AppState = DataState & PrefsState & Actions;
+export type Maybe<T> = T | Promise<T>;
+
+export interface ApiUser {
+  id: string;
+  username: string;
+  name: string;
+  role: Role;
+  teacherId?: string;
+}
+
+interface ApiState {
+  /** "demo" — localStorage-сид; "api" — данные с backend'а */
+  dataMode: "demo" | "api";
+  /** авторизован в API-режиме (session-cookie) */
+  authed: boolean;
+  apiUser: ApiUser | null;
+  booted: boolean;
+}
+
+interface ApiActions {
+  bootstrap: () => Promise<void>;
+  login: (username: string, password: string) => Promise<Result>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+  setDataMode: (mode: "demo" | "api") => Promise<void>;
+}
+
+export type AppState = DataState & PrefsState & Actions & ApiState & ApiActions;
 
 const freshData = (): DataState => ({
   branches: BRANCHES,
@@ -130,6 +161,11 @@ const dayBefore = (iso: string) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** API-режим: ?api в URL или VITE_API_MODE=1 */
+const API_WANTED =
+  typeof window !== "undefined" &&
+  (new URLSearchParams(window.location.search).has("api") || import.meta.env.VITE_API_MODE === "1");
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
@@ -157,6 +193,76 @@ export const useAppStore = create<AppState>()(
         onboardingDone: false,
         recent: [],
         sidebarCollapsed: false,
+
+        dataMode: API_WANTED ? "api" : "demo",
+        authed: false,
+        apiUser: null,
+        booted: false,
+
+        bootstrap: async () => {
+          if (!API_WANTED) {
+            set({ booted: true });
+            return;
+          }
+          await get().setDataMode("api");
+        },
+        login: async (username, password) => {
+          try {
+            await csrfInit();
+            const payload = await apiPost<MePayload>("/auth/login", { username, password });
+            const data = await hydrate(payload);
+            const role = (payload.role as Role) || "admin";
+            set({
+              ...data, authed: true, role,
+              teacherId: payload.teacher_id ?? get().teacherId,
+              apiUser: {
+                id: payload.user.id, username: payload.user.username,
+                name: `${payload.user.last_name} ${payload.user.first_name}`.trim() || payload.user.username,
+                role, teacherId: payload.teacher_id ?? undefined,
+              },
+            });
+            return { ok: true };
+          } catch (e) {
+            return { ok: false, reason: e instanceof Error ? e.message : "Ошибка входа" };
+          }
+        },
+        logout: async () => {
+          try {
+            await apiPost("/auth/logout", {});
+          } catch { /* сессия уже мертва */ }
+          set({ authed: false, apiUser: null });
+        },
+        refresh: async () => {
+          if (get().dataMode !== "api" || !get().authed) return;
+          const payload = await me();
+          const data = await hydrate(payload);
+          set({ ...data });
+        },
+        setDataMode: async (mode) => {
+          if (mode === "demo") {
+            set({ ...LOCAL_ACTIONS, dataMode: "demo", authed: false, apiUser: null });
+            return;
+          }
+          set({ ...makeApiActions(get), dataMode: "api" });
+          try {
+            await csrfInit();
+            const payload = await me();
+            const data = await hydrate(payload);
+            const role = (payload.role as Role) || "admin";
+            set({
+              ...data, authed: true, role,
+              teacherId: payload.teacher_id ?? get().teacherId,
+              apiUser: {
+                id: payload.user.id, username: payload.user.username,
+                name: `${payload.user.last_name} ${payload.user.first_name}`.trim() || payload.user.username,
+                role, teacherId: payload.teacher_id ?? undefined,
+              },
+            });
+          } catch {
+            set({ authed: false });
+          }
+          set({ booted: true });
+        },
 
         setTheme: (theme) => set({ theme }),
         setRole: (role, teacherId) => set((s) => ({ role, teacherId: teacherId ?? s.teacherId })),
@@ -557,6 +663,20 @@ export const useAppStore = create<AppState>()(
   ),
 );
 
+/* ---------- API-режим: локальные impls сохраняем для возврата в demo ---------- */
+const SWAPPABLE_ACTIONS = [
+  "setSettings", "toggleMonthClosed", "log",
+  "upsertStudent", "setStudentsStatus", "deleteStudent", "closeContract",
+  "upsertGroup", "addStudentsToGroup", "removeStudentFromGroup", "transferStudent",
+  "addLesson", "generateMonthLessons", "removeLesson", "setSubstitute", "setCancelled",
+  "setAttendance", "setAttendanceBulk",
+  "addPayment", "deletePayment", "importStatement", "confirmPayment", "splitPayment",
+  "rejectPayment", "requeuePayment", "addAdjustment", "removeAdjustment",
+  "upsertTeacher", "setTeacherStatus", "generateActs", "updateAct", "deleteAct",
+  "upsertSigner", "removeSigner", "upsertBranch", "addAcademicYear", "setCurrentYear", "addAddendum",
+] as const;
+const LOCAL_ACTIONS = Object.fromEntries(SWAPPABLE_ACTIONS.map((k) => [k, useAppStore.getState()[k]])) as Partial<AppState>;
+
 function splitName(name: string) {
   const [lastName = "", firstName = "", middleName = ""] = name.split(" ");
   return { lastName, firstName, middleName };
@@ -567,7 +687,10 @@ export function useCurrentUser() {
   const role = useAppStore((s) => s.role);
   const teacherId = useAppStore((s) => s.teacherId);
   const teachers = useAppStore((s) => s.teachers);
+  const apiUser = useAppStore((s) => s.apiUser);
+  const dataMode = useAppStore((s) => s.dataMode);
   return useMemo(() => {
+    if (dataMode === "api" && apiUser) return { id: apiUser.id, name: apiUser.name, email: "", role: apiUser.role, teacherId: apiUser.teacherId };
     if (role === "teacher") {
       const t = teachers.find((x) => x.id === teacherId);
       if (t) return { id: `u_${t.id}`, name: fullName(t), email: t.email, role, teacherId: t.id };

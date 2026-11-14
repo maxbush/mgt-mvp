@@ -6,7 +6,9 @@ from django.db import models
 class Branch(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    short_name = models.CharField(max_length=64, blank=True)
     address = models.CharField(max_length=255, blank=True)
+    color = models.CharField(max_length=16, blank=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -126,5 +128,6 @@ class SystemSetting(models.Model):
 class AddendumTemplate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=128)
+    clause = models.CharField(max_length=128, blank=True)
     body = models.TextField()  # с плейсхолдерами {{contract_number}} и т.п.
     is_active = models.BooleanField(default=True)

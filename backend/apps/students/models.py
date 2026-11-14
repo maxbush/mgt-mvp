@@ -16,6 +16,7 @@ class Student(models.Model):
     school = models.CharField(max_length=255, blank=True)
     parent_name = models.CharField(max_length=128, blank=True)  # ФИО родителя
     parent_phone = models.CharField(max_length=32, blank=True)
+    parent_phone2 = models.CharField(max_length=32, blank=True)
     parent_email = models.EmailField(blank=True)
     comment = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=STATUS, default="active")
@@ -40,6 +41,7 @@ class Contract(models.Model):
     number_norm = models.CharField(max_length=32, db_index=True)  # нормализованный: нижн.регистр, без пробелов, lat→cyr
     date = models.DateField()
     status = models.CharField(max_length=16, choices=STATUS, default="active")
+    closed_at = models.DateField(null=True, blank=True)
     comment = models.CharField(max_length=255, blank=True)
 
     class Meta:
