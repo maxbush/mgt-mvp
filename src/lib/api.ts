@@ -210,6 +210,17 @@ export function fetchStatement(frontendSheetId: string, month: string, groupId?:
   return api.get<{ rows: ServerStatementRow[]; totals: Record<string, number> | null }>(`/statements?${q}`);
 }
 
+/** URL выгрузки ведомости XLSX (открывается ссылкой — session-cookie сама пройдёт). */
+export function statementXlsxUrl(frontendSheetId: string, month: string, groupId?: string) {
+  const sheet = sheetApiId(frontendSheetId);
+  const q = new URLSearchParams({ month });
+  if (sheet) q.set("sheet", sheet);
+  if (groupId) q.set("group", groupId);
+  return `${API_BASE}/statements/export.xlsx?${q}`;
+}
+
+export const registryXlsxUrl = `${API_BASE}/registry/export.xlsx`;
+
 export function fetchDashboard() {
   return api.get<{
     today: string;

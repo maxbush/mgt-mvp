@@ -33,7 +33,7 @@ cd backend && .venv\Scripts\python.exe manage.py migrate && .venv\Scripts\python
 #    dev: http://localhost:5173/?api   (или VITE_API_MODE=1 в .env)
 ```
 
-Экран логина → `admin/admin123`, `teacher/teacher123`, `accountant/account123`. В api-режиме все чтения/мутации идут в `/api/v1` (session-cookie + CSRF), действия стора делегируются в backend и делают refresh состояния. Вернуться в демо: меню пользователя → «Подключить к серверу…» ↔ ссылка «Открыть демо-режим» на экране логина.
+Экран логина → `admin/admin123`, `teacher/teacher123`, `accountant/account123`. В api-режиме все чтения/мутации идут в `/api/v1` (session-cookie + CSRF), действия стора делегируются в backend и делают refresh состояния. Ведомости и дашборд считаются на сервере (`/statements`, `/dashboard`), доступны XLSX-выгрузки ведомости и реестра. Вернуться в демо: меню пользователя → «Подключить к серверу…» ↔ ссылка «Открыть демо-режим» на экране логина.
 
 ## Возможности
 

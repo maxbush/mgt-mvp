@@ -2,11 +2,12 @@ import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { ExternalLink, Lock, LockOpen, Printer, Wallet, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, Lock, LockOpen, Printer, Wallet, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useAppStore, useCurMonth } from "@/lib/store";
 import { can } from "@/lib/rbac";
 import { isMonthClosed, statementSheets, type StatementRow } from "@/lib/selectors";
 import { useStatementRows } from "@/lib/server-data";
+import { statementXlsxUrl } from "@/lib/api";
 import { cn, compareRu, formatMoney, fullName, monthLabel, plural, round2 } from "@/lib/utils";
 import { DataTable, DataTableColumnHeader } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
@@ -204,6 +205,11 @@ export function StatementsPage() {
               </Button>
             )}
             <Button variant="outline" onClick={() => setPrintOpen(true)} disabled={!rows.length}><Printer /> Печать ведомости</Button>
+            {state.dataMode === "api" && (
+              <Button variant="outline" asChild disabled={!rows.length}>
+                <a href={statementXlsxUrl(sheetId ?? "", month)} download><FileSpreadsheet /> XLSX</a>
+              </Button>
+            )}
             {canPay && <Button onClick={() => (closed ? toast.error("Месяц закрыт", { description: "Платежи за закрытый месяц не вносятся. Откройте месяц." }) : setPay({ open: true }))}><Wallet /> Внести оплату</Button>}
           </>
         }
