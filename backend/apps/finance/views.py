@@ -73,6 +73,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if not has_code(request.user, "payments.import"):
             raise RoleScopeError("Нет права payments.import")
         f = request.FILES.get("file")
+        if f and f.size > 10 * 1024 * 1024:
+            raise ValidationError("Файл больше 10 МБ")
         try:
             text = request.data.get("csv") or (f.read().decode("utf-8-sig") if f else "")
         except UnicodeDecodeError:

@@ -84,12 +84,13 @@ class TaxRateViewSet(BaseDictViewSet):
 
 
 from rest_framework import viewsets as _vs
+from rest_framework.permissions import IsAuthenticated
 
 
 class SettingsView(_vs.ViewSet):
     """GET/PATCH /settings/ — оперативные настройки (SystemSetting). GET — всем, PATCH — settings.edit."""
 
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def list(self, request):
         return Response({s.key: s.value for s in SystemSetting.objects.all()})
