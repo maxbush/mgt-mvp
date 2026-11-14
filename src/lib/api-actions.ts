@@ -34,6 +34,22 @@ const runR = async (get: S, fn: () => Promise<unknown>, okMsg?: string): Promise
   }
 };
 
+/** Действие с возвратом значения: вызов → refresh → значение | fallback при ошибке. */
+const runV = async <T>(get: S, fn: () => Promise<T>, fallback: T): Promise<T> => {
+  try {
+    const r = await fn();
+    await get().refresh();
+    return r;
+  } catch (e) {
+    err(e);
+    return fallback;
+  }
+};
+
+/** POST при отсутствии сущности, PATCH при наличии. */
+const upsert = (path: string, id: string | null, body: unknown) =>
+  id ? api.patch(`${path}/${id}/`, body) : api.post(`${path}/`, body);
+
 export function makeApiActions(get: S): Partial<AppState> {
   return {
     /* ---------- настройки ---------- */
@@ -75,8 +91,8 @@ export function makeApiActions(get: S): Partial<AppState> {
           opening_balance: student.openingBalance,
         };
         const exists = get().students.some((s) => s.id === student.id);
-        const sid = exists ? student.id : (await api.post<{ id: string }>("/students/", body)).id;
-        if (exists) await api.patch(`/students/${sid}/`, body);
+        const saved = await upsert("/students", exists ? student.id : null, body);
+        const sid = exists ? student.id : (saved as { id: string }).id;
         if (contract && !exists) {
           await api.post(`/students/${sid}/contracts/`, { number: contract.number, academic_year: contract.academicYearId, date: contract.date, status: "active" });
         }
@@ -95,8 +111,7 @@ export function makeApiActions(get: S): Partial<AppState> {
           schedule: group.schedule, weekdays: group.weekdays, status: group.status,
           prices: group.prices.map((p) => ({ date_from: p.from, price: p.price })),
         };
-        if (get().groups.some((g) => g.id === group.id)) await api.patch(`/groups/${group.id}/`, body);
-        else await api.post("/groups/", body);
+        await upsert("/groups", get().groups.some((g) => g.id === group.id) ? group.id : null, body);
       });
     },
     addStudentsToGroup: (groupId, studentIds, from) =>
@@ -107,26 +122,10 @@ export function makeApiActions(get: S): Partial<AppState> {
       runR(get, () => api.post("/enrollments/transfer", { student_id: studentId, from_group_id: fromGroupId, to_group_id: toGroupId, date })),
 
     /* ---------- журнал ---------- */
-    addLesson: async (groupId, date) => {
-      try {
-        const l = await api.post<{ id: string }>("/lessons/", { group: groupId, date });
-        await get().refresh();
-        return l.id;
-      } catch (e) {
-        err(e);
-        return null;
-      }
-    },
-    generateMonthLessons: async (groupId, month) => {
-      try {
-        const r = await api.post<{ created: number }>(`/groups/${groupId}/generate-lessons/`, { month });
-        await get().refresh();
-        return r.created;
-      } catch (e) {
-        err(e);
-        return 0;
-      }
-    },
+    addLesson: async (groupId, date) =>
+      runV(get, async () => (await api.post<{ id: string }>("/lessons/", { group: groupId, date })).id, null),
+    generateMonthLessons: async (groupId, month) =>
+      runV(get, async () => (await api.post<{ created: number }>(`/groups/${groupId}/generate-lessons/`, { month })).created, 0),
     removeLesson: (lessonId) => run(get, () => api.del(`/lessons/${lessonId}/`)),
     setSubstitute: (lessonId, teacherId) => run(get, () => api.patch(`/lessons/${lessonId}/`, { substitute_teacher: teacherId })),
     setCancelled: (lessonId, cancelled) => run(get, () => api.patch(`/lessons/${lessonId}/`, { cancelled })),
@@ -136,19 +135,18 @@ export function makeApiActions(get: S): Partial<AppState> {
 
     /* ---------- платежи ---------- */
     addPayment: (p) =>
-      runR(get, () => api.post("/payments/", { student: p.studentId, date: p.date, amount: p.amount, method: p.method === "cash" ? "cash" : p.method, payer: p.payer ?? "", comment: p.comment ?? "", status: "confirmed" })),
+      runR(get, () => api.post("/payments/", { student: p.studentId, date: p.date, amount: p.amount, method: p.method, payer: p.payer ?? "", comment: p.comment ?? "", status: "confirmed" })),
     deletePayment: (id) => runR(get, () => api.del(`/payments/${id}/`)),
-    importStatement: async (csv): Promise<ImportResult> => {
-      try {
-        const r = await api.post<{ loaded: number; auto: number; queued: number; dups: number; bad: number; bad_rows: { row: number }[] }>(
-          "/payments/import", { csv });
-        await get().refresh();
-        return { loaded: r.loaded, auto: r.auto, queued: r.queued, dups: r.dups, closed: 0, bad: (r.bad_rows ?? []).map((x) => x.row) };
-      } catch (e) {
-        err(e);
-        return { loaded: 0, auto: 0, queued: 0, dups: 0, closed: 0, bad: [] };
-      }
-    },
+    importStatement: (csv): Promise<ImportResult> =>
+      runV(
+        get,
+        async () => {
+          const r = await api.post<{ loaded: number; auto: number; queued: number; dups: number; bad_rows: { row: number }[] }>(
+            "/payments/import", { csv });
+          return { loaded: r.loaded, auto: r.auto, queued: r.queued, dups: r.dups, closed: 0, bad: (r.bad_rows ?? []).map((x) => x.row) };
+        },
+        { loaded: 0, auto: 0, queued: 0, dups: 0, closed: 0, bad: [] },
+      ),
     confirmPayment: (id, studentId) => runR(get, () => api.post(`/payments/${id}/confirm`, { student_id: studentId }), "Платёж подтверждён"),
     splitPayment: (id, parts) =>
       runR(get, () => api.post(`/payments/${id}/split`, { parts: parts.map((x) => ({ student_id: x.studentId, amount: x.amount })) }), "Платёж разделён"),
@@ -169,21 +167,12 @@ export function makeApiActions(get: S): Partial<AppState> {
           personal_number: t.passport.personalNumber, iban: t.bank.iban,
           bank_name: t.bank.bankName, bank_bic: t.bank.bic, address_reg: t.address,
         };
-        if (get().teachers.some((x) => x.id === t.id)) await api.patch(`/teachers/${t.id}/`, body);
-        else await api.post("/teachers/", body);
+        await upsert("/teachers", get().teachers.some((x) => x.id === t.id) ? t.id : null, body);
       });
     },
     setTeacherStatus: (id, status) => run(get, () => api.post(`/teachers/${id}/status`, { status })),
-    generateActs: async (month) => {
-      try {
-        const r = await api.post<{ generated: number }>("/acts/generate", { month });
-        await get().refresh();
-        return r.generated;
-      } catch (e) {
-        err(e);
-        return 0;
-      }
-    },
+    generateActs: async (month) =>
+      runV(get, async () => (await api.post<{ generated: number }>("/acts/generate", { month })).generated, 0),
     updateAct: (id, patch) =>
       run(get, () =>
         api.patch(`/acts/${id}/`, {
@@ -199,16 +188,14 @@ export function makeApiActions(get: S): Partial<AppState> {
     upsertSigner: (s) => {
       run(get, async () => {
         const body = { name: s.name, position: s.position, position_gen: s.positionGen ?? "", female: !!s.female, is_default: !!s.isDefault };
-        if (get().signers.some((x) => x.id === s.id)) await api.patch(`/signers/${s.id}/`, body);
-        else await api.post("/signers/", body);
+        await upsert("/signers", get().signers.some((x) => x.id === s.id) ? s.id : null, body);
       });
     },
     removeSigner: (id) => run(get, () => api.del(`/signers/${id}/`)),
     upsertBranch: (b) => {
       run(get, async () => {
         const body = { name: b.name, short_name: b.shortName, address: b.address, color: b.color };
-        if (get().branches.some((x) => x.id === b.id)) await api.patch(`/branches/${b.id}/`, body);
-        else await api.post("/branches/", body);
+        await upsert("/branches", get().branches.some((x) => x.id === b.id) ? b.id : null, body);
       });
     },
     addAcademicYear: (y) => run(get, () => api.post("/academic-years/", { name: y.label, start_date: y.startDate, end_date: y.endDate, is_current: y.isCurrent })),

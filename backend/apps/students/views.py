@@ -4,7 +4,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_save
 from apps.core.calc import norm_contract_no
 from apps.core.errors import ConflictError
 from apps.core.permissions import HasCode
@@ -55,14 +55,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         return qs.distinct()
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "create", "students.student", obj.pk, after=StudentWriteSerializer(obj).data)
+        audit_save(self.request, s, "create", after=lambda obj: s.data)
 
     def perform_update(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "update", "students.student", obj.pk, after=StudentWriteSerializer(obj).data)
+        audit_save(self.request, s, "update", after=lambda obj: s.data)
 
     def destroy(self, request, *a, **kw):
         """Удаление только при отсутствии связанных данных — иначе 409."""
@@ -124,9 +120,7 @@ class ContractViewSet(viewsets.ModelViewSet):
         c = contract_conflict(s.validated_data.get("number", s.instance.number), str(s.instance.academic_year_id), exclude_id=s.instance.id)
         if c:
             raise ConflictError(c["message"])
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "update", "students.contract", obj.pk, after=ContractSerializer(obj).data)
+        audit_save(self.request, s, "update", after=lambda obj: s.data)
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):

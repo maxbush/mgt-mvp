@@ -3,7 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_delete, audit_save
 from apps.core.permissions import HasCode
 
 from .models import (
@@ -21,19 +21,13 @@ class BaseDictViewSet(viewsets.ModelViewSet):
     permission_classes = [HasCode]
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "create", obj._meta.label_lower, obj.pk, after=s.data)
+        audit_save(self.request, s, "create", after=lambda obj: s.data)
 
     def perform_update(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "update", obj._meta.label_lower, obj.pk, after=s.data)
+        audit_save(self.request, s, "update", after=lambda obj: s.data)
 
     def perform_destroy(self, obj):
-        with transaction.atomic():
-            audit(self.request.user, "delete", obj._meta.label_lower, obj.pk)
-            obj.delete()
+        audit_delete(self.request, obj)
 
 
 class BranchViewSet(BaseDictViewSet):

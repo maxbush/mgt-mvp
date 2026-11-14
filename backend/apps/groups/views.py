@@ -5,7 +5,7 @@ from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_save
 from apps.core.errors import ApiError, ConflictError
 from apps.core.permissions import HasCode, has_code, teacher_group_ids
 from apps.students.models import Student
@@ -35,14 +35,10 @@ class GroupViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "create", "groups.group", obj.pk, after=GroupSerializer(obj).data)
+        audit_save(self.request, s, "create", after=lambda obj: s.data)
 
     def perform_update(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "update", "groups.group", obj.pk, after=GroupSerializer(obj).data)
+        audit_save(self.request, s, "update", after=lambda obj: s.data)
 
     @action(detail=True, methods=["post"])
     def enroll(self, request, pk=None):

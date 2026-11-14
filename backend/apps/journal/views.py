@@ -8,7 +8,7 @@ from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_delete
 from apps.core.errors import ApiError, ConflictError, MonthClosedError, RoleScopeError
 from apps.core.permissions import HasCode, has_code, teacher_group_ids
 from apps.finance.models import MonthClose
@@ -97,9 +97,7 @@ class LessonViewSet(viewsets.ModelViewSet):
             raise MonthClosedError(f"Месяц {str(obj.date)[:7]} закрыт")
         if obj.marks.exists():
             raise ConflictError("Нельзя удалить занятие с отметками — отмените его")
-        with transaction.atomic():
-            audit(self.request.user, "delete", "journal.lesson", obj.pk)
-            obj.delete()
+        audit_delete(self.request, obj)
 
     @action(detail=True, methods=["put"])
     def attendance(self, request, pk=None):

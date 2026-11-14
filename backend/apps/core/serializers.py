@@ -34,9 +34,13 @@ class AuditSerializer(serializers.ModelSerializer):
 
 
 def me_payload(user):
-    """Ответ /auth/me: юзер, роль, права, scope преподавателя, окружение."""
+    """Ответ /auth/me: юзер, роль, права, scope преподавателя, окружение.
+
+    Кросс-апповые импорты — внутри функции (разрыв цикла core ↔ dictionaries/finance).
+    """
     from apps.core.dates import server_today
     from apps.dictionaries.models import AcademicYear
+    from apps.dictionaries.serializers import AcademicYearSerializer
     from apps.finance.models import MonthClose
 
     g = user.groups.first()
@@ -50,6 +54,3 @@ def me_payload(user):
         "closed_months": list(MonthClose.objects.filter(reopened_at__isnull=True).values_list("month", flat=True)),
     }
 
-
-# локальный импорт чтобы избежать цикла
-from apps.dictionaries.serializers import AcademicYearSerializer  # noqa: E402

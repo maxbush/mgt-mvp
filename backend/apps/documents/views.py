@@ -11,7 +11,7 @@ from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_save
 from apps.core.calc import rub_words, to_k
 from apps.core.errors import ConflictError
 from apps.core.permissions import HasCode
@@ -55,9 +55,7 @@ class AddendumViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save(created_by=self.request.user)
-            audit(self.request.user, "create", "documents.addendum", obj.pk)
+        audit_save(self.request, s, "create", save_kwargs={"created_by": self.request.user})
 
     @action(detail=False, methods=["post"], url_path="preview")
     def preview(self, request):

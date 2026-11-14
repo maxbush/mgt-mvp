@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_delete, audit_save
 from apps.core.calc import act_amounts, rate_on
 from apps.core.errors import ConflictError, RoleScopeError
 from apps.core.permissions import HasCode, has_code
@@ -54,14 +54,10 @@ class TeacherViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "create", "staff.teacher", obj.pk, after={"name": str(obj)})
+        audit_save(self.request, s, "create")
 
     def perform_update(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "update", "staff.teacher", obj.pk)
+        audit_save(self.request, s, "update")
 
     @action(detail=True, methods=["post"])
     def status(self, request, pk=None):
@@ -90,23 +86,17 @@ class ActViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, s):
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "act", "staff.act", obj.pk, after={"teacher": str(obj.teacher_id), "month": obj.month})
+        audit_save(self.request, s, "act", after={"teacher": str(s.validated_data.get("teacher_id", "")), "month": str(s.validated_data.get("month", ""))})
 
     def perform_update(self, s):
         if s.instance.status == "signed":
             raise ConflictError("Подписанный акт нельзя редактировать — снимите подпись")
-        with transaction.atomic():
-            obj = s.save()
-            audit(self.request.user, "act", "staff.act", obj.pk)
+        audit_save(self.request, s, "act")
 
     def perform_destroy(self, obj):
         if obj.status == "signed":
             raise ConflictError("Подписанный акт нельзя удалить — снимите подпись")
-        with transaction.atomic():
-            audit(self.request.user, "act", "staff.act", obj.pk)
-            obj.delete()
+        audit_delete(self.request, obj, "act")
 
     @action(detail=True, methods=["post"])
     def sign(self, request, pk=None):

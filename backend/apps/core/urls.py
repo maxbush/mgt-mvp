@@ -1,19 +1,19 @@
 from django.urls import path
 
-from . import views
+from .views import (
+    AuditListView, CsrfView, DashboardView, HealthView, LoginView, LogoutView, MeView,
+    PasswordResetRequestView, SearchView,
+)
 
 urlpatterns = [
-    path("health", views.HealthView.as_view()),
-    path("auth/csrf", views.CsrfView.as_view()),
-    path("auth/login", views.LoginView.as_view()),
-    path("auth/logout", views.LogoutView.as_view()),
-    path("auth/me", views.MeView.as_view()),
-    path("auth/password-reset", views.PasswordResetRequestView.as_view()),
-    path("auth/password-reset/confirm", views.PasswordResetRequestView.as_view()),
-    path("audit/", views.AuditListView.as_view()),
-    path("search", views.SearchView.as_view()),
+    path("health", HealthView.as_view()),
+    path("auth/csrf", CsrfView.as_view()),
+    path("auth/login", LoginView.as_view()),
+    path("auth/logout", LogoutView.as_view()),
+    path("auth/me", MeView.as_view()),
+    path("auth/password-reset", PasswordResetRequestView.as_view()),
+    path("auth/password-reset/confirm", PasswordResetRequestView.as_view()),
+    path("audit/", AuditListView.as_view()),
+    path("search", SearchView.as_view()),
+    path("dashboard", DashboardView.as_view()),
 ]
-from django.urls import path as _p
-from .views import DashboardView
-
-urlpatterns += [_p("dashboard", DashboardView.as_view())]

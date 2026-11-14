@@ -21,6 +21,23 @@ import { makeApiActions } from "./api-actions";
 
 const apiPost = <T,>(p: string, b: unknown) => apiClient.post<T>(p, b);
 
+/** Применить ответ /auth/me: apiUser + роль/teacherId в prefs. */
+function meToPrefs(payload: MePayload, fallbackTeacherId?: string) {
+  const role = (payload.role as Role) || "admin";
+  const teacherId = payload.teacher_id ?? fallbackTeacherId;
+  return {
+    role,
+    teacherId,
+    apiUser: {
+      id: payload.user.id,
+      username: payload.user.username,
+      name: `${payload.user.last_name} ${payload.user.first_name}`.trim() || payload.user.username,
+      role,
+      teacherId: payload.teacher_id ?? undefined,
+    } as ApiUser,
+  };
+}
+
 export type Theme = "light" | "dark" | "system";
 export type Result = { ok: true } | { ok: false; reason: string };
 export interface ImportResult {
@@ -211,16 +228,7 @@ export const useAppStore = create<AppState>()(
             await csrfInit();
             const payload = await apiPost<MePayload>("/auth/login", { username, password });
             const data = await hydrate(payload);
-            const role = (payload.role as Role) || "admin";
-            set({
-              ...data, authed: true, role,
-              teacherId: payload.teacher_id ?? get().teacherId,
-              apiUser: {
-                id: payload.user.id, username: payload.user.username,
-                name: `${payload.user.last_name} ${payload.user.first_name}`.trim() || payload.user.username,
-                role, teacherId: payload.teacher_id ?? undefined,
-              },
-            });
+            set({ ...data, authed: true, ...meToPrefs(payload, get().teacherId) });
             return { ok: true };
           } catch (e) {
             return { ok: false, reason: e instanceof Error ? e.message : "Ошибка входа" };
@@ -248,16 +256,7 @@ export const useAppStore = create<AppState>()(
             await csrfInit();
             const payload = await me();
             const data = await hydrate(payload);
-            const role = (payload.role as Role) || "admin";
-            set({
-              ...data, authed: true, role,
-              teacherId: payload.teacher_id ?? get().teacherId,
-              apiUser: {
-                id: payload.user.id, username: payload.user.username,
-                name: `${payload.user.last_name} ${payload.user.first_name}`.trim() || payload.user.username,
-                role, teacherId: payload.teacher_id ?? undefined,
-              },
-            });
+            set({ ...data, authed: true, ...meToPrefs(payload, get().teacherId) });
           } catch {
             set({ authed: false });
           }

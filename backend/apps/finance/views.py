@@ -10,7 +10,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.audit import audit
+from apps.core.audit import audit, audit_delete, audit_save
 from apps.core.calc import from_k, split_even, to_k
 from apps.core.errors import ConflictError, MonthClosedError, RoleScopeError
 from apps.core.models import ImportBatch
@@ -51,15 +51,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, s):
         _check_month_open(str(s.validated_data["date"])[:7])
-        with transaction.atomic():
-            obj = s.save(created_by=self.request.user)
-            audit(self.request.user, "payment", "finance.payment", obj.pk, after={"amount": str(obj.amount), "student": str(obj.student_id)})
+        obj = audit_save(self.request, s, "payment", save_kwargs={"created_by": self.request.user},
+                         after={"amount": str(s.validated_data.get("amount")), "student": str(s.validated_data.get("student_id", ""))})
 
     def perform_destroy(self, obj):
         _check_month_open(str(obj.date)[:7])
-        with transaction.atomic():
-            audit(self.request.user, "payment", "finance.payment", obj.pk, before={"amount": str(obj.amount)})
-            obj.delete()
+        audit_delete(self.request, obj, "payment", before={"amount": str(obj.amount)})
 
     @action(detail=False, methods=["get"])
     def pending(self, request):
@@ -192,15 +189,12 @@ class AdjustmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, s):
         _check_month_open(str(s.validated_data["date"])[:7])
-        with transaction.atomic():
-            obj = s.save(created_by=self.request.user)
-            audit(self.request.user, "payment", "finance.adjustment", obj.pk, after={"amount": str(obj.amount)})
+        obj = audit_save(self.request, s, "payment", save_kwargs={"created_by": self.request.user},
+                         after={"amount": str(s.validated_data.get("amount"))})
 
     def perform_destroy(self, obj):
         _check_month_open(str(obj.date)[:7])
-        with transaction.atomic():
-            audit(self.request.user, "payment", "finance.adjustment", obj.pk, before={"amount": str(obj.amount)})
-            obj.delete()
+        audit_delete(self.request, obj, "payment", before={"amount": str(obj.amount)})
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses={200: OpenApiTypes.OBJECT})
