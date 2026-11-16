@@ -64,7 +64,7 @@ function NewContractDialog({ open, onOpenChange, studentId }: { open: boolean; o
               value={tariffId}
               onValueChange={setTariffId}
               placeholder="— не указан (цена группы)"
-              options={state.priceItems.map((p) => ({ value: p.id, label: p.title ?? `${p.directionLabel ?? p.direction} · ${p.normoHours} н/ч · ${formatMoney(p.price)}` }))}
+              options={state.priceItems.filter((p) => p.isActive !== false).map((p) => ({ value: p.id, label: p.title ?? `${p.directionLabel ?? p.direction} · ${p.normoHours} н/ч · ${formatMoney(p.price)}` }))}
             />
           </Field>
           <Field label="Действует до">

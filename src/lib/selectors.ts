@@ -141,27 +141,48 @@ export const contractValidUntil = (s: DataState, c: Contract): string | undefine
   return until;
 };
 
-/**
- * Цена занятия по договору/допнику для направления на дату, иначе null → цена группы.
- * Договор покрывает дату: c.date <= d <= (closedAt ?? ∞); допник действует со своей даты.
- */
-export const contractPrice = (s: DataState, studentId: string, direction: string, date: string): number | null => {
+/* Индекс тарифов: studentId → direction → кандидаты {from,to,price} (порт _tariffs_index).
+   Строится один раз на DataState и переиспользуется всеми вызовами contractPrice. */
+type TariffEntry = { from: string; to: string; price: number };
+let _tariffsKey: unknown[] = [];
+let _tariffs: Map<string, Map<string, TariffEntry[]>> = new Map();
+function tariffIndex(s: DataState): Map<string, Map<string, TariffEntry[]>> {
+  const key = [s.contracts, s.addendums, s.priceItems];
+  if (key.every((k, i) => k === _tariffsKey[i])) return _tariffs;
   const items = new Map(s.priceItems.map((p) => [p.id, p]));
-  const candidates: { from: string; price: number }[] = [];
-  const consider = (tariffId: string | undefined, from: string, to: string) => {
+  const idx = new Map<string, Map<string, TariffEntry[]>>();
+  const push = (sid: string, tariffId: string | undefined, from: string, to: string) => {
     const t = tariffId && items.get(tariffId);
-    if (t && t.direction === direction && from <= date && date <= to) candidates.push({ from, price: t.price });
+    if (!t) return;
+    let dirs = idx.get(sid);
+    if (!dirs) idx.set(sid, (dirs = new Map()));
+    const arr = dirs.get(t.direction) ?? [];
+    arr.push({ from, to, price: t.price });
+    dirs.set(t.direction, arr);
   };
   for (const c of s.contracts) {
-    if (c.studentId !== studentId) continue;
     // действующий — открытое окно (просрочка списывается по последнему тарифу);
     // закрытый/расторгнутый — до closedAt, без него тариф не действует
     const to = c.closedAt ?? (c.status === "active" ? "9999-12-31" : c.date);
-    consider(c.tariffId, c.date, to);
-    for (const a of s.addendums) if (a.contractId === c.id) consider(a.tariffId, a.date, to);
+    push(c.studentId, c.tariffId, c.date, to);
+    for (const a of s.addendums) if (a.contractId === c.id) push(c.studentId, a.tariffId, a.date, to);
   }
-  candidates.sort((a, b) => b.from.localeCompare(a.from));
-  return candidates[0]?.price ?? null;
+  for (const dirs of idx.values()) for (const arr of dirs.values()) arr.sort((a, b) => a.from.localeCompare(b.from));
+  _tariffsKey = key;
+  _tariffs = idx;
+  return idx;
+}
+
+/**
+ * Цена занятия по договору/допнику для направления на дату, иначе null → цена группы.
+ * Позднейший кандидат ≤ date в окне договора побеждает (порт _contract_price).
+ */
+export const contractPrice = (s: DataState, studentId: string, direction: string, date: string): number | null => {
+  let best: TariffEntry | null = null;
+  for (const e of tariffIndex(s).get(studentId)?.get(direction) ?? []) {
+    if (e.from <= date && date <= e.to && (!best || e.from > best.from)) best = e;
+  }
+  return best?.price ?? null;
 };
 
 export type ContractState = "none" | "expired" | "active";

@@ -611,7 +611,9 @@ export function JournalPage() {
                         </ParentPopover>
                       </td>
                       {lessons.map((l, c) => {
-                        const st = state.attendance[attKey(l.id, s.id)];
+                        const key = attKey(l.id, s.id);
+                        const st = state.attendance[key];
+                        const docPending = (state.docStates?.[key] ?? (st === "sick" || st === "excused" ? "pending" : "none")) === "pending";
                         const isFocus = focus?.r === r && focus?.c === c;
                         const enrolled = isEnrolledOn(state, s.id, l.groupId, l.date);
                         if (!enrolled && !st) {
@@ -631,7 +633,7 @@ export function JournalPage() {
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => { setFocus({ r, c }); gridRef.current?.focus({ preventScroll: true }); cycle(l, s.id); }}
                                 className={cn(
-                                  "mx-auto flex size-9 items-center justify-center rounded-md border text-[13px] font-semibold transition-all duration-100 select-none",
+                                  "relative mx-auto flex size-9 items-center justify-center rounded-md border text-[13px] font-semibold transition-all duration-100 select-none",
                                   st ? ATTENDANCE_META[st].className : "border-dashed border-border/80 text-transparent hover:border-border hover:bg-muted/50",
                                   chk.ok ? "active:scale-90" : "cursor-not-allowed opacity-80",
                                   l.cancelled && "opacity-40",
@@ -639,6 +641,7 @@ export function JournalPage() {
                                 )}
                               >
                                 {st ? ATTENDANCE_META[st].short : "·"}
+                                {docPending && <Paperclip className="absolute -right-1 -top-1 size-3 rounded-full bg-warning/90 p-0.5 text-white" />}
                               </button>
                             </Tooltip>
                           </td>

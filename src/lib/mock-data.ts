@@ -136,12 +136,12 @@ const RAW: Raw[] = [
 
 /* ---------- прейскурант: направление → нормочасы → цена занятия ---------- */
 export const PRICE_ITEMS: PriceItem[] = [
-  { id: "pi_e30", direction: "electronics", directionLabel: "Электроника", normoHours: 8, price: 30, dateFrom: "2026-09-01", title: "Электроника · 8 н/ч · 30,00 BYN/занятие" },
-  { id: "pi_e35", direction: "electronics", directionLabel: "Электроника", normoHours: 8, price: 35, dateFrom: "2026-09-01", title: "Электроника (гимназия) · 8 н/ч · 35,00 BYN/занятие" },
-  { id: "pi_r30", direction: "robotics", directionLabel: "Робототехника", normoHours: 8, price: 30, dateFrom: "2026-09-01", title: "Робототехника · 8 н/ч · 30,00 BYN/занятие" },
-  { id: "pi_r35", direction: "robotics", directionLabel: "Робототехника", normoHours: 8, price: 35, dateFrom: "2026-10-01", title: "Робототехника (новая цена) · 8 н/ч · 35,00 BYN/занятие" },
-  { id: "pi_it45", direction: "it", directionLabel: "IT", normoHours: 8, price: 45, dateFrom: "2026-09-01", title: "IT · 8 н/ч · 45,00 BYN/занятие" },
-  { id: "pi_o40", direction: "other", directionLabel: "Другое", normoHours: 8, price: 40, dateFrom: "2026-09-01", title: "Прочее · 8 н/ч · 40,00 BYN/занятие" },
+  { id: "pi_e30", direction: "electronics", directionLabel: "Электроника", normoHours: 64, price: 30, dateFrom: "2026-09-01", title: "Электроника · 64 н/ч · 30,00 BYN/занятие" },
+  { id: "pi_e35", direction: "electronics", directionLabel: "Электроника", normoHours: 64, price: 35, dateFrom: "2026-09-01", title: "Электроника (гимназия) · 64 н/ч · 35,00 BYN/занятие" },
+  { id: "pi_r30", direction: "robotics", directionLabel: "Робототехника", normoHours: 64, price: 30, dateFrom: "2026-09-01", title: "Робототехника · 64 н/ч · 30,00 BYN/занятие" },
+  { id: "pi_r35", direction: "robotics", directionLabel: "Робототехника", normoHours: 64, price: 35, dateFrom: "2026-10-01", title: "Робототехника (новая цена) · 64 н/ч · 35,00 BYN/занятие" },
+  { id: "pi_it45", direction: "it", directionLabel: "IT", normoHours: 64, price: 45, dateFrom: "2026-09-01", title: "IT · 64 н/ч · 45,00 BYN/занятие" },
+  { id: "pi_o40", direction: "other", directionLabel: "Другое", normoHours: 64, price: 40, dateFrom: "2026-09-01", title: "Прочее · 64 н/ч · 40,00 BYN/занятие" },
 ];
 const GROUP_TARIFF: Record<string, string> = { g_e1: "pi_e30", g_e2: "pi_e30", g_r1: "pi_r30", g_r2: "pi_r30", g_k1: "pi_r30", g_it1: "pi_it45", g_g1: "pi_e35" };
 const tariffTitle = (pid: string) => PRICE_ITEMS.find((p) => p.id === pid)?.title;
