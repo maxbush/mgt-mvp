@@ -24,16 +24,56 @@ def _ds(d):
 
 # ---------- Списания (charge-проводки из отметок) ----------
 
+def _tariffs_index(student_ids):
+    """Индекс тарифов из договоров: student_id → {direction → [(eff_date, price)]}.
+
+    Кандидаты — пункт прейскуранта из договора (действует с даты договора) и
+    из допсоглашений (действует с даты допника). Договор должен покрывать дату:
+    date ≤ d и (closed_at пуст или > d). Последний по дате кандидат побеждает.
+    """
+    from apps.students.models import Contract
+
+    idx = {}
+    contracts = (
+        Contract.objects.select_related("tariff")
+        .prefetch_related("addendums__tariff")
+        .filter(student_id__in=student_ids)
+    )
+    for c in contracts:
+        entries = idx.setdefault(str(c.student_id), {})
+        eff_from, eff_to = _ds(c.date), _ds(c.closed_at) if c.closed_at else "9999-12-31"
+        if c.tariff_id:
+            entries.setdefault(c.tariff.direction, []).append((eff_from, eff_to, c.tariff.price, str(c.tariff_id)))
+        for a in c.addendums.all():
+            if a.tariff_id:
+                entries.setdefault(a.tariff.direction, []).append((_ds(a.date), eff_to, a.tariff.price, str(a.tariff_id)))
+    for dirs in idx.values():
+        for entries in dirs.values():
+            entries.sort(key=lambda e: e[0])
+    return idx
+
+
+def _contract_price(tariffs, direction, date_str):
+    """Цена занятия по договору на дату: позднейший кандидат ≤ date, договор покрывает дату."""
+    best = None
+    for eff_from, eff_to, price, _tid in tariffs.get(direction, []):
+        if eff_from <= date_str <= eff_to and (best is None or eff_from > best[0]):
+            best = (eff_from, price)
+    return best[1] if best else None
+
+
 def _charges_index():
     """Индекс списаний: student_id → [ledger-записи charge] (порт index().charges).
 
     Списание = отметка в журнале по политике chargeable на дату занятия
-    × цена группы на дату занятия (исторические цены!). Отменённые занятия —
-    никогда. Суммы отрицательные.
+    × тариф: пункт прейскуранта из договора/допника на направление группы,
+    иначе цена группы на дату (исторические цены). Отменённые — никогда.
+    Суммы отрицательные.
     """
     charges = {}
     lessons = {l.id: l for l in Lesson.objects.select_related("group").prefetch_related("group__prices").all()}
     marks = Attendance.objects.select_related("lesson").all()
+    tariffs = _tariffs_index({str(m.student_id) for m in marks})
     policy_cache = {}
     for m in marks:
         l = lessons.get(m.lesson_id)
@@ -45,7 +85,9 @@ def _charges_index():
         if not is_chargeable(m.status, policy_cache[d]):
             continue
         g = l.group
-        price = g.price_on(d)
+        price = _contract_price(tariffs.get(str(m.student_id), {}), g.direction, d)
+        if price is None:
+            price = g.price_on(d)
         suffix = {"absent": " (неявка)", "excused": " (уважительная)", "sick": " (болел)"}.get(m.status, "")
         charges.setdefault(str(m.student_id), []).append({
             "date": d, "type": "charge", "amount": -to_k(price),
@@ -146,7 +188,7 @@ def statement_rows(sheet, month, group_id=None, debt_only=False):
     charges_idx = _charges_index()
     groups_map = {str(g.id): g for g in Group.objects.all()}
     rows = []
-    for st in Student.objects.prefetch_related("enrollments").all():
+    for st in Student.objects.prefetch_related("enrollments", "contracts__addendums").all():
         en = list(st.enrollments.all())
         overlap = [e for e in en if _ds(e.date_from) <= b and (e.date_to is None or _ds(e.date_to) >= a)]
         led = ledger_entries(st.id)
@@ -174,7 +216,7 @@ def statement_rows(sheet, month, group_id=None, debt_only=False):
         if debt_only and r["end"] >= 0:
             continue
         rows.append({
-            "student": {"id": str(st.id), "name": str(st), "grade": st.grade, "status": st.status},
+            "student": {"id": str(st.id), "name": str(st), "grade": st.grade, "status": st.status, "contractState": st.contract_state()},
             "groups": [{"id": str(g.id), "code": g.code, "name": g.name} for g in grs],
             "opening": float(from_k(r["start"])), "paid": float(from_k(r["paid"])),
             "consumedCount": r["spent_count"], "consumed": float(from_k(r["spent"])),

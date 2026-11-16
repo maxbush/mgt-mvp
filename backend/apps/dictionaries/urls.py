@@ -13,6 +13,7 @@ router.register("addendum-templates", views.AddendumTemplateViewSet, basename="a
 router.register("act-rates", views.ActRateViewSet, basename="act-rate")
 router.register("charge-policies", views.ChargePolicyViewSet, basename="charge-policy")
 router.register("tax-rates", views.TaxRateViewSet, basename="tax-rate")
+router.register("price-items", views.PriceItemViewSet, basename="price-item")
 
 urlpatterns = [
     path("settings/", views.SettingsView.as_view({"get": "list", "patch": "partial_update"})),

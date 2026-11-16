@@ -52,6 +52,10 @@ class HasCode(BasePermission):
     def has_permission(self, request, view):
         code = getattr(view, "required_code", self.required_code)
         vcode = getattr(view, "view_code", self.view_code) or code
+        if request.method in SAFE_METHODS and vcode == "*":
+            # Справочные данные (филиалы, годы, направления, прейскурант…)
+            # читают все роли — они нужны для гидрации стора.
+            return request.user.is_authenticated
         need = vcode if request.method in SAFE_METHODS and vcode else code
         if not need:
             return True

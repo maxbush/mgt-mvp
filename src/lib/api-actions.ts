@@ -94,7 +94,7 @@ export function makeApiActions(get: S): Partial<AppState> {
         const saved = await upsert("/students", exists ? student.id : null, body);
         const sid = exists ? student.id : (saved as { id: string }).id;
         if (contract && !exists) {
-          await api.post(`/students/${sid}/contracts/`, { number: contract.number, academic_year: contract.academicYearId, date: contract.date, status: "active" });
+          await api.post(`/students/${sid}/contracts/`, { number: contract.number, academic_year: contract.academicYearId, date: contract.date, status: "active", tariff: contract.tariffId ?? null, valid_until: contract.validUntil ?? null });
         }
       });
     },
@@ -203,7 +203,21 @@ export function makeApiActions(get: S): Partial<AppState> {
 
     /* ---------- документы ---------- */
     addAddendum: (a) =>
-      run(get, () => api.post("/addendums/", { contract: a.contractId, number: a.number, date: a.date, template: a.templateId || null, clause: a.clause, signer: a.signerId || null, body: a.text })),
+      run(get, () => api.post("/addendums/", { contract: a.contractId, number: a.number, date: a.date, template: a.templateId || null, clause: a.clause, signer: a.signerId || null, body: a.text, tariff: a.tariffId ?? null, new_valid_until: a.newValidUntil ?? null })),
+
+    upsertPriceItem: (p) =>
+      runR(get, () =>
+        p.id
+          ? api.patch(`/price-items/${p.id}/`, { direction: p.direction, normo_hours: p.normoHours, price: p.price, date_from: p.dateFrom, title: p.title ?? "", is_active: p.isActive ?? true })
+          : api.post("/price-items/", { direction: p.direction, normo_hours: p.normoHours, price: p.price, date_from: p.dateFrom, title: p.title ?? "", is_active: p.isActive ?? true }),
+        "Пункт прейскуранта сохранён"),
+    removePriceItem: (id) => runR(get, () => api.del(`/price-items/${id}/`), "Пункт удалён"),
+    uploadCertificate: (lessonId, studentId, file) => {
+      const fd = new FormData();
+      fd.append("student_id", studentId);
+      fd.append("file", file);
+      void runR(get, () => api.postFile(`/lessons/${lessonId}/certificate/`, fd), "Справка загружена");
+    },
 
     /* аудит пишет сервер — log() в api-режиме no-op */
     log: () => {},

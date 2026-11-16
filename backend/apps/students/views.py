@@ -37,7 +37,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         return StudentSerializer if self.request.method in ("GET", "HEAD") else StudentWriteSerializer
 
     def get_queryset(self):
-        qs = Student.objects.prefetch_related("contracts__academic_year")
+        qs = Student.objects.prefetch_related("contracts__academic_year", "contracts__addendums")
         # Преподаватель видит только учеников своих групп (включая замены), как в журнале.
         u = self.request.user
         if u.role == "teacher" and u.teacher_id and not has_code(u, "finance.view"):

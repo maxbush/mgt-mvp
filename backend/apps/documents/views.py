@@ -13,10 +13,11 @@ from rest_framework.response import Response
 
 from apps.core.audit import audit, audit_save
 from apps.core.calc import rub_words, to_k
-from apps.core.errors import ConflictError, RoleScopeError
+from apps.core.errors import ConflictError, MonthClosedError, RoleScopeError
 from apps.core.permissions import HasCode, has_code, scoped_student_ids, teacher_group_ids
 from apps.dictionaries.models import AddendumTemplate, Signer, StatementSheet
 from apps.finance import services as fin
+from apps.finance.models import MonthClose
 from apps.finance.services import statement_rows, statement_totals
 from apps.journal.services import journal_payload
 from apps.staff.models import Act
@@ -60,6 +61,11 @@ class AddendumViewSet(viewsets.ModelViewSet):
         return qs.filter(contract__student_id__in=ids) if ids is not None else qs
 
     def perform_create(self, s):
+        d = s.validated_data
+        # Допник, несущий дельту расчётов, датой в закрытый месяц менял бы
+        # зафиксированные начисления — запрещаем (423).
+        if (d.get("tariff") or d.get("new_valid_until")) and MonthClose.is_closed(str(d["date"])[:7]):
+            raise MonthClosedError("Месяц допсоглашения закрыт — параметры расчётов за него не меняются")
         audit_save(self.request, s, "create", save_kwargs={"created_by": self.request.user})
 
     @action(detail=False, methods=["post"], url_path="preview")

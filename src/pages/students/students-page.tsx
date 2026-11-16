@@ -46,8 +46,17 @@ export function ContractHistory({ studentId, compact }: { studentId: string; com
               <StatusBadge status={c.status} />
               <span className="text-[12px] text-muted-foreground">
                 от {formatDate(c.date)}
-                {c.closedAt && ` · до ${formatDate(c.closedAt)}`}
+                {c.effectiveValidUntil && ` · до ${formatDate(c.effectiveValidUntil)}`}
+                {c.closedAt && ` · закрыт ${formatDate(c.closedAt)}`}
               </span>
+              {c.tariffId && (
+                <Badge variant="outline" title="Пункт прейскуранта — цена по договору">
+                  {state.priceItems.find((p) => p.id === c.tariffId)?.title ?? c.tariffTitle ?? "тариф"}
+                </Badge>
+              )}
+              {c.status === "active" && c.effectiveValidUntil && c.effectiveValidUntil < state.settings.today && (
+                <Badge variant="destructive">просрочен</Badge>
+              )}
               {adds.length > 0 && (
                 <Badge variant="violet">
                   <FileSignature /> {adds.length} доп.

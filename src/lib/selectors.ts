@@ -1,6 +1,6 @@
 import type {
   AcademicYear, Act, Addendum, Adjustment, AttendanceMap, AttendanceStatus, AuditEntry, Branch, Contract, Direction, Enrollment, Group,
-  LedgerEntry, Lesson, MembershipChange, Payment, Role, Settings, Signer, Student, Teacher,
+  LedgerEntry, Lesson, MembershipChange, Payment, PriceItem, Role, Settings, Signer, Student, Teacher,
 } from "./types";
 import { DIRECTION_LABELS } from "./types";
 import { actAmounts, balanceAt, fromK, isChargeable, monthRowK, normContractNo, priceOn, rateOn, similarityPct, normName, toK } from "./calc";
@@ -24,6 +24,9 @@ export interface DataState {
   membership: MembershipChange[];
   addendums: Addendum[];
   settings: Settings;
+  priceItems: PriceItem[];
+  /** lessonId|studentId → none|pending|confirmed — состояние справки к отметке (API-режим) */
+  docStates?: Record<string, string>;
 }
 
 export const attKey = (lessonId: string, studentId: string) => `${lessonId}|${studentId}`;
@@ -127,11 +130,58 @@ export function contractConflict(s: DataState, number: string, academicYearId: s
 export const isContractNumberTaken = (s: DataState, number: string, academicYearId: string, excludeId?: string) =>
   !!contractConflict(s, number, academicYearId, excludeId);
 
+/* ---------- Тариф из договора (порт бэкенд-резолвера) ---------- */
+
+/** Срок действия договора с учётом допников-продлений. */
+export const contractValidUntil = (s: DataState, c: Contract): string | undefined => {
+  let until = c.validUntil;
+  for (const a of s.addendums) {
+    if (a.contractId === c.id && a.newValidUntil && (!until || a.newValidUntil > until)) until = a.newValidUntil;
+  }
+  return until;
+};
+
+/**
+ * Цена занятия по договору/допнику для направления на дату, иначе null → цена группы.
+ * Договор покрывает дату: c.date <= d <= (closedAt ?? ∞); допник действует со своей даты.
+ */
+export const contractPrice = (s: DataState, studentId: string, direction: string, date: string): number | null => {
+  const items = new Map(s.priceItems.map((p) => [p.id, p]));
+  const candidates: { from: string; price: number }[] = [];
+  const consider = (tariffId: string | undefined, from: string, to: string) => {
+    const t = tariffId && items.get(tariffId);
+    if (t && t.direction === direction && from <= date && date <= to) candidates.push({ from, price: t.price });
+  };
+  for (const c of s.contracts) {
+    if (c.studentId !== studentId) continue;
+    const to = c.closedAt ?? "9999-12-31";
+    consider(c.tariffId, c.date, to);
+    for (const a of s.addendums) if (a.contractId === c.id) consider(a.tariffId, a.date, to);
+  }
+  candidates.sort((a, b) => b.from.localeCompare(a.from));
+  return candidates[0]?.price ?? null;
+};
+
+export type ContractState = "none" | "expired" | "active";
+/** none — договоров нет; expired — есть, но все просрочены/закрыты; active — действующий. */
+export function contractState(s: DataState, studentId: string): ContractState {
+  const t = todayOf(s);
+  let any = false;
+  for (const c of s.contracts) {
+    if (c.studentId !== studentId) continue;
+    any = true;
+    if (c.status !== "active") continue;
+    const until = contractValidUntil(s, c);
+    if (!until || until >= t) return "active";
+  }
+  return any ? "expired" : "none";
+}
+
 /* ---------- Состояние занятий и права на правку ---------- */
 let idxKey: unknown[] = [];
 let idx: { marked: Set<string>; charges: Map<string, LedgerEntry[]> } = { marked: new Set(), charges: new Map() };
 function index(s: DataState) {
-  const key = [s.lessons, s.attendance, s.groups, s.settings];
+  const key = [s.lessons, s.attendance, s.groups, s.settings, s.contracts, s.addendums, s.priceItems];
   if (key.every((k, i) => k === idxKey[i])) return idx;
   const lessonById = new Map(s.lessons.map((l) => [l.id, l]));
   const groupMap = new Map(s.groups.map((g) => [g.id, g]));
@@ -145,7 +195,7 @@ function index(s: DataState) {
     if (l.cancelled || !isChargeable(st, s.settings)) continue;
     const g = groupMap.get(l.groupId);
     if (!g) continue;
-    const price = priceOn(g.prices, l.date);
+    const price = contractPrice(s, studentId, g.direction, l.date) ?? priceOn(g.prices, l.date);
     const arr = charges.get(studentId) ?? [];
     arr.push({ date: l.date, type: "charge", amount: -toK(price), label: `Занятие ${g.code}${st === "absent" ? " (неявка)" : st === "excused" ? " (уважительная)" : st === "sick" ? " (болел)" : ""}`, ref: l.id, groupId: g.id });
     charges.set(studentId, arr);
@@ -284,7 +334,7 @@ export function statementRows(s: DataState, sheetId: string, month: string, opts
     if (opts.debtOnly && !(r.end < 0)) continue;
     rows.push({
       month, label: monthLabel(month), opening: fromK(r.start), paid: fromK(r.paid), consumedCount: r.spentCount, consumed: fromK(r.spent), closing: fromK(r.end),
-      student: st, groups: grs, byGroup,
+      student: { ...st, contractState: contractState(s, st.id) }, groups: grs, byGroup,
       multi: Object.keys(byGroup).length > 1 || overlap.some((e) => !gids.has(e.groupId)),
       foreign: Object.keys(byGroup).some((k) => !gids.has(k)),
     });

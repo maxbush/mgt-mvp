@@ -92,7 +92,14 @@ export function StatementsPage() {
           <div className="flex items-center gap-2.5">
             <Avatar name={fullName(row.original.student)} size="md" />
             <div className="min-w-0">
-              <div className="truncate font-medium">{fullName(row.original.student)}</div>
+              <div className="flex items-center gap-1.5 truncate font-medium">
+                <span className="truncate">{fullName(row.original.student)}</span>
+                {row.original.student.contractState === "expired" && (
+                  <Badge variant="destructive" className="shrink-0 px-1 py-0 text-[10px]" title="Нет действующего договора — списания идут по последнему тарифу">
+                    договор просрочен
+                  </Badge>
+                )}
+              </div>
               <div className="truncate text-[11.5px] text-muted-foreground">{row.original.groups.map((g) => g.name).join(", ") || "без группы"}</div>
             </div>
           </div>

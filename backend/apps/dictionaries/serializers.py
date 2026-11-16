@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
-    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, Signer, StatementSheet, TaxRate,
+    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, PriceItem, Signer, StatementSheet, TaxRate,
 )
 
 
@@ -56,4 +56,12 @@ class TaxRateSerializer(serializers.ModelSerializer):
 class AddendumTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AddendumTemplate
+        fields = "__all__"
+
+
+class PriceItemSerializer(serializers.ModelSerializer):
+    direction_label = serializers.CharField(source="get_direction_display", read_only=True)
+
+    class Meta:
+        model = PriceItem
         fields = "__all__"

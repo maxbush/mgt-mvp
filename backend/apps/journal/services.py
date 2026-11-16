@@ -81,9 +81,11 @@ def journal_payload(group_id, month, user):
     for e in ens:
         students[str(e.student_id)] = e.student
     marks = {}
+    doc_states = {}
     for l in lessons:
         for m in l.marks.select_related("student").all():
             marks[f"{l.id}|{m.student_id}"] = m.status
+            doc_states[f"{l.id}|{m.student_id}"] = m.doc_state
     # неактивные — только если есть отметки в месяце
     marked_sids = {k.split("|")[1] for k in marks}
     student_list = [s for sid, s in students.items() if s.status == "active" or sid in marked_sids]
@@ -107,4 +109,5 @@ def journal_payload(group_id, month, user):
                       "parent_phone": s.parent_phone} for s in student_list],
         "lessons": out_lessons,
         "marks": marks,
+        "docStates": doc_states,
     }

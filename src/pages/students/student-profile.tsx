@@ -34,6 +34,8 @@ function NewContractDialog({ open, onOpenChange, studentId }: { open: boolean; o
   const [number, setNumber] = React.useState("");
   const [yearId, setYearId] = React.useState(currentYear(state).id);
   const [date, setDate] = React.useState(state.settings.today);
+  const [tariffId, setTariffId] = React.useState("");
+  const [validUntil, setValidUntil] = React.useState("");
   const conflict = number ? contractConflict(state, number, yearId) : null;
   const taken = !!conflict;
   const hasActive = state.contracts.some((c) => c.studentId === studentId && c.academicYearId === yearId && c.status === "active");
@@ -57,6 +59,17 @@ function NewContractDialog({ open, onOpenChange, studentId }: { open: boolean; o
           <Field label="Дата">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
+          <Field label="Пункт прейскуранта (тариф)">
+            <SimpleSelect
+              value={tariffId}
+              onValueChange={setTariffId}
+              placeholder="— не указан (цена группы)"
+              options={state.priceItems.map((p) => ({ value: p.id, label: p.title ?? `${p.directionLabel ?? p.direction} · ${p.normoHours} н/ч · ${formatMoney(p.price)}` }))}
+            />
+          </Field>
+          <Field label="Действует до">
+            <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+          </Field>
           {hasActive && <p className="rounded-md bg-warning/15 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-200">В этом учебном году уже есть активный договор. Сначала закройте его, чтобы избежать дублей.</p>}
         </div>
         <DialogFooter>
@@ -64,7 +77,7 @@ function NewContractDialog({ open, onOpenChange, studentId }: { open: boolean; o
           <Button
             disabled={!number || taken || hasActive}
             onClick={() => {
-              state.upsertStudent(student, { number, academicYearId: yearId, date });
+              state.upsertStudent(student, { number, academicYearId: yearId, date, tariffId: tariffId || undefined, validUntil: validUntil || undefined });
               toast.success(`Договор ${number} создан`);
               onOpenChange(false);
             }}

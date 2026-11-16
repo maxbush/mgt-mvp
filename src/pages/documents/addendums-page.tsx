@@ -45,6 +45,8 @@ export function AddendumsPage() {
   const [text, setText] = React.useState(ADDENDUM_TEMPLATES[0].text);
   const [effDate, setEffDate] = React.useState(today);
   const [price, setPrice] = React.useState("");
+  const [tariffId, setTariffId] = React.useState("");
+  const [newValidUntil, setNewValidUntil] = React.useState("");
   const [groupId, setGroupId] = React.useState("");
   const [signer, setSigner] = React.useState<PrintSigner>(defaultSigner);
   const [printOpen, setPrintOpen] = React.useState(false);
@@ -119,7 +121,7 @@ export function AddendumsPage() {
   const save = () => {
     if (!student || !contract) return;
     const s = state.signers.find((x) => x.name === signer.name) ?? state.signers[0];
-    addAddendum({ contractId: contract.id, studentId: student.id, number, date, templateId, clause, text: filled, signerId: s.id });
+    addAddendum({ contractId: contract.id, studentId: student.id, number, date, templateId, clause, text: filled, signerId: s.id, tariffId: tariffId || undefined, newValidUntil: newValidUntil || undefined });
     toast.success(`Доп. соглашение №${number} сохранено`, { description: `${fullName(student)} · договор ${contract.number}` });
     setNumber(String(Number(number) + 1));
   };
@@ -160,6 +162,15 @@ export function AddendumsPage() {
                     <Field label="Стоимость, Br"><Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="tabular text-right" /></Field>
                     <Field label="Группа" className="col-span-2">
                       <SimpleSelect value={group?.id} onValueChange={setGroupId} options={state.groups.map((g) => ({ value: g.id, label: g.name }))} placeholder="Выберите группу" />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/70 bg-muted/30 p-3">
+                    <div className="col-span-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Изменение условий договора (влияет на расчёты)</div>
+                    <Field label="Новый тариф прейскуранта" hint="С даты допника списания пойдут по этому пункту">
+                      <SimpleSelect value={tariffId} onValueChange={setTariffId} options={state.priceItems.filter((p) => p.isActive !== false).map((p) => ({ value: p.id, label: `${p.title || p.directionLabel || p.direction} · ${formatMoney(p.price)} · с ${formatDate(p.dateFrom)}` }))} placeholder="Без изменения тарифа" />
+                    </Field>
+                    <Field label="Новый срок действия договора" hint="Продлевает срок из договора/предыдущих допников">
+                      <Input type="date" value={newValidUntil} onChange={(e) => setNewValidUntil(e.target.value)} />
                     </Field>
                   </div>
                   <div className="grid grid-cols-[80px_1fr] gap-3">

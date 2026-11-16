@@ -15,7 +15,7 @@ from apps.core.calc import act_amounts, is_chargeable, price_on
 from apps.core.models import RolePermission, User
 from apps.core.permissions import ROLE_DEFAULTS
 from apps.dictionaries.models import (
-    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, Signer, StatementSheet, SystemSetting, TaxRate,
+    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, PriceItem, Signer, StatementSheet, SystemSetting, TaxRate,
 )
 from apps.finance.models import Adjustment, MonthBalance, MonthClose, Payment
 from apps.finance.services import balance_row
@@ -23,6 +23,7 @@ from apps.groups.models import Enrollment, Group, GroupPrice, MembershipChange
 from apps.journal.models import Attendance, Lesson
 from apps.staff.models import Act, Teacher
 from apps.students.models import Contract, Student
+from apps.documents.models import Addendum
 
 DEMO_TODAY = date(2026, 10, 22)
 DEMO_RATE = Decimal("46.52")
@@ -155,6 +156,25 @@ class Command(BaseCommand):
         it_dir = directions["it"]
         StatementSheet.objects.create(kind="direction", name="IT-класс", address="", direction=it_dir, order=99)
 
+        # прейскурант: направление → нормочасы → цена занятия.
+        # Цены совпадают с реальными ценами групп — тариф договора побеждает цену
+        # группы, поэтому для демо пункты должны покрывать все используемые цены.
+        price_items = {}
+        for direc, hours, price, from_, title in [
+            ("electronics", 64, "30.00", "2026-09-01", "Юный электронщик"),
+            ("electronics", 64, "35.00", "2026-09-01", "Юный электронщик · гимназия №32"),
+            ("robotics", 64, "30.00", "2026-09-01", "Робототехника"),
+            ("robotics", 64, "35.00", "2026-10-01", "Робототехника · цена с октября"),
+            ("it", 64, "45.00", "2026-09-01", "IT-класс"),
+        ]:
+            pi = PriceItem.objects.create(direction=direc, normo_hours=hours, price=price, date_from=from_, title=title)
+            price_items[(direc, str(Decimal(price)))] = pi
+
+        def _pi_for(group, on_date):
+            """Пункт прейскуранта, совпадающий с ценой группы на дату договора."""
+            p = group.price_on(on_date)
+            return price_items.get((group.direction, str(p)))
+
         ActRate.objects.create(date_from="2026-09-01", rate=DEMO_RATE)
         ChargePolicy.objects.create(date_from="2026-09-01", charge_absent=True, charge_sick=False, charge_excused=False)
         TaxRate.objects.create(kind="income_tax", date_from="2026-09-01", pct=13)
@@ -212,7 +232,9 @@ class Command(BaseCommand):
             Student.objects.filter(pk=s.pk).update(created_at=f"{cdate}T10:00:00+03:00")
             Contract.objects.create(student=s, academic_year=ay, number=no, date=cdate,
                                     status="active" if active else "terminated",
-                                    closed_at=None if active else "2026-09-25")
+                                    closed_at=None if active else "2026-09-25",
+                                    tariff=_pi_for(first_group, cdate),
+                                    valid_until="2027-05-31")
             if sid == "s07":
                 Contract.objects.create(student=s, academic_year=ay_old, number="12э", date="2025-09-20", status="closed", closed_at="2026-05-31")
             for k, (gid, frm, to) in enumerate(enr):
@@ -221,6 +243,17 @@ class Command(BaseCommand):
                 MembershipChange.objects.create(student=s, kind="enroll", to_group=groups[gid], date=frm)
                 if to:
                     MembershipChange.objects.create(student=s, kind="unenroll", from_group=groups[gid], date=to)
+
+        # допсоглашения: ученики группы р2 — новый пункт прейскуранта с 01.10
+        # (цена группы поднялась 30→35, допник переводит договор на новый тариф)
+        for e in Enrollment.objects.filter(group=groups["g_r2"]):
+            con = Contract.objects.filter(student=e.student, status="active").first()
+            if con:
+                Addendum.objects.create(
+                    contract=con, number="1", date="2026-10-01", clause="1",
+                    body="Изменена стоимость занятия: 35,00 руб. с 01.10.2026",
+                    tariff=price_items[("robotics", "35.00")],
+                )
 
         # --- занятия и отметки: 07.09 – 31.10 ---
         rand = _mulberry32(20261022)

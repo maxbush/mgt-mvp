@@ -30,6 +30,26 @@ class Student(models.Model):
     def __str__(self):
         return f"{self.last_name} {self.first_name}".strip()
 
+    def contract_state(self, today=None):
+        """none — договоров нет; expired — есть, но все просрочены/закрыты; active — действующий.
+
+        Просроченный договор не блокирует списания (тариф применяется последний),
+        но состояние флажится в ведомости и карточке ученика.
+        """
+        from apps.core.dates import server_today
+
+        t = today or server_today()
+        ts = t.isoformat() if hasattr(t, "isoformat") else str(t)
+        any_contracts = False
+        for c in self.contracts.all():
+            any_contracts = True
+            if c.status != "active":
+                continue
+            until = c.effective_valid_until()
+            if until is None or until.isoformat() >= ts:
+                return "active"
+        return "expired" if any_contracts else "none"
+
 
 class Contract(models.Model):
     STATUS = [("active", "Действует"), ("closed", "Закрыт"), ("terminated", "Расторгнут")]
@@ -42,6 +62,8 @@ class Contract(models.Model):
     date = models.DateField()
     status = models.CharField(max_length=16, choices=STATUS, default="active")
     closed_at = models.DateField(null=True, blank=True)
+    tariff = models.ForeignKey("dictionaries.PriceItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="contracts")
+    valid_until = models.DateField(null=True, blank=True)
     comment = models.CharField(max_length=255, blank=True)
 
     class Meta:
@@ -49,6 +71,14 @@ class Contract(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["academic_year", "number_norm"], name="uq_contract_number_year"),
         ]
+
+    def effective_valid_until(self):
+        """Срок действия с учётом допников-продлений: позднейшая дата выигрывает."""
+        until = self.valid_until
+        for a in self.addendums.all():
+            if a.new_valid_until and (until is None or a.new_valid_until > until):
+                until = a.new_valid_until
+        return until
 
     def save(self, *a, **kw):
         from apps.core.calc import norm_contract_no

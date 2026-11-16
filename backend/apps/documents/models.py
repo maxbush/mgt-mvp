@@ -14,6 +14,9 @@ class Addendum(models.Model):
     clause = models.CharField(max_length=128, blank=True)
     signer = models.ForeignKey("dictionaries.Signer", null=True, blank=True, on_delete=models.SET_NULL)
     body = models.TextField()  # итоговый текст после подстановки
+    # Дельта условий: новый тариф (действует с date допника) и/или новый срок действия договора.
+    tariff = models.ForeignKey("dictionaries.PriceItem", null=True, blank=True, on_delete=models.SET_NULL)
+    new_valid_until = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey("core.User", null=True, blank=True, on_delete=models.SET_NULL)
 

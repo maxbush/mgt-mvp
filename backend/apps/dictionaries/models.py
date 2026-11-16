@@ -24,6 +24,28 @@ class Direction(models.Model):
         return self.name
 
 
+class PriceItem(models.Model):
+    """Пункт прейскуранта: направление → нормочасы → цена занятия.
+
+    Версии прейскуранта — новые строки с date_from; строка иммутабельна
+    для ссылки из договора (договор фиксирует цену на момент подписания).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    direction = models.CharField(max_length=16, choices=[("electronics", "Электроника"), ("robotics", "Робототехника"), ("it", "IT"), ("other", "Другое")])
+    normo_hours = models.IntegerField(help_text="Нормочасы за расчётный период")
+    price = models.DecimalField(max_digits=8, decimal_places=2, help_text="Цена одного занятия")
+    date_from = models.DateField(help_text="Пункт действует с даты")
+    title = models.CharField(max_length=128, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["direction", "-date_from"]
+
+    def __str__(self):
+        return self.title or f"{self.get_direction_display()}: {self.normo_hours} н/ч — {self.price} BYN"
+
+
 class AcademicYear(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=32)  # «2025/2026»

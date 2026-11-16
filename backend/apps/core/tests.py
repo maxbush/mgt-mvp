@@ -409,3 +409,97 @@ class ApiAuthTests(TestCase):
         self.assertIn("students", d)
         self.assertIn("lessons", d)
         self.assertIn("marks", d)
+
+
+class TariffAndDocsTests(TestCase):
+    """Прейскурант/тарифы договоров/допники/справки к отметкам."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.management import call_command
+        call_command("seed_demo", verbosity=0)
+
+    def _login(self, name):
+        from apps.core.models import User
+        c = Client()
+        c.force_login(User.objects.get(username=name))
+        return c
+
+    def test_price_items_read_all_write_admin(self):
+        r = self._login("teacher").get("/api/v1/price-items/")
+        self.assertEqual(r.status_code, 200)
+        self.assertGreater(len(r.json()), 0)
+        body = {"direction": "electronics", "normo_hours": 64, "price": "99.00", "date_from": "2026-11-01"}
+        r = self._login("teacher").post("/api/v1/price-items/", data=body, content_type="application/json")
+        self.assertEqual(r.status_code, 403)
+        r = self._login("admin").post("/api/v1/price-items/", data=body, content_type="application/json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Client().get("/api/v1/price-items/").status_code, 403)
+
+    def test_addendum_tariff_overrides_by_date(self):
+        """Ученики р2: до 01.10 тариф договора 30, с 01.10 — допник 35 (как цена группы)."""
+        from apps.finance.services import ledger_entries
+        from apps.groups.models import Enrollment
+        st = Enrollment.objects.filter(group__name__contains="№2 группа", group__direction="robotics").first().student
+        charges = {str(e["date"]): -e["amount"] / 100 for e in ledger_entries(st.id) if e["type"] == "charge"}
+        self.assertTrue(any(d < "2026-10-01" and v == Decimal("30.00") for d, v in charges.items()))
+        self.assertTrue(any(d >= "2026-10-01" and v == Decimal("35.00") for d, v in charges.items()))
+
+    def test_group_price_fallback_without_contract(self):
+        """Ученик без тарифа в договоре → цена группы (закрываем тариф, проверяем fallback)."""
+        from apps.finance.services import _contract_price, _tariffs_index
+        from apps.students.models import Student
+        st = Student.objects.filter(contracts__tariff__isnull=False).first()
+        tariffs = _tariffs_index([str(st.id)])
+        # на дату до начала договора кандидатов нет → None → fallback на цену группы
+        self.assertIsNone(_contract_price(tariffs[str(st.id)], "electronics", "2020-01-01"))
+
+    def test_expired_contract_flag(self):
+        from apps.students.models import Contract, Student
+        st = Student.objects.filter(contracts__status="active").first()
+        self.assertEqual(st.contract_state(), "active")
+        Contract.objects.filter(student=st, status="active").update(valid_until="2026-10-01")
+        st.refresh_from_db()
+        self.assertEqual(st.contract_state(), "expired")
+
+    def test_addendum_delta_in_closed_month_423(self):
+        from apps.students.models import Contract
+        from apps.dictionaries.models import PriceItem
+        con = Contract.objects.filter(status="active", tariff__isnull=False).first()
+        pi = PriceItem.objects.exclude(id=con.tariff_id).first()
+        r = self._login("admin").post("/api/v1/addendums/", data={
+            "contract": str(con.id), "number": "9", "date": "2026-09-15",
+            "body": "x", "tariff": str(pi.id)}, content_type="application/json")
+        self.assertEqual(r.status_code, 423, r.content)
+        r = self._login("admin").post("/api/v1/addendums/", data={
+            "contract": str(con.id), "number": "9", "date": "2026-09-15",
+            "body": "x"}, content_type="application/json")
+        self.assertNotEqual(r.status_code, 423)  # без дельты допник в закрытый месяц — можно
+
+    def test_certificate_upload_flow(self):
+        import io
+        from apps.journal.models import Attendance
+        m = Attendance.objects.filter(lesson__date__gte="2026-10-01", status__in=["sick", "excused"]).first() or Attendance.objects.filter(lesson__date__gte="2026-10-01").first()
+        m.status = "sick"
+        m.save(update_fields=["status"])
+        self.assertEqual(m.doc_state, "pending")
+        c = self._login("admin")
+        # неверный тип файла
+        bad = io.BytesIO(b"x" * 10)
+        bad.name = "cert.exe"
+        r = c.post(f"/api/v1/lessons/{m.lesson_id}/certificate/", {"student_id": str(m.student_id), "file": bad})
+        self.assertEqual(r.status_code, 400)
+        # корректный pdf
+        good = io.BytesIO(b"%PDF-1.4 fake")
+        good.name = "cert.pdf"
+        r = c.post(f"/api/v1/lessons/{m.lesson_id}/certificate/", {"student_id": str(m.student_id), "file": good})
+        self.assertEqual(r.status_code, 200, r.content)
+        m.refresh_from_db()
+        self.assertEqual(m.doc_state, "confirmed")
+        # отметке «был» справка не нужна → 409
+        m.status = "present"
+        m.save(update_fields=["status"])
+        good2 = io.BytesIO(b"%PDF-1.4 fake")
+        good2.name = "cert.pdf"
+        r = c.post(f"/api/v1/lessons/{m.lesson_id}/certificate/", {"student_id": str(m.student_id), "file": good2})
+        self.assertEqual(r.status_code, 409)

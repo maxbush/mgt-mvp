@@ -132,6 +132,8 @@ export interface Student {
   notes?: string;
   createdAt: string;
   openingBalance: number;
+  /** none — договоров нет; expired — все просрочены/закрыты; active — действующий (API-режим) */
+  contractState?: "none" | "expired" | "active";
 }
 
 export type ContractStatus = "active" | "closed" | "terminated";
@@ -144,6 +146,24 @@ export interface Contract {
   date: string;
   status: ContractStatus;
   closedAt?: string;
+  /** Пункт прейскуранта — цена и нормочасы, зафиксированные договором */
+  tariffId?: string;
+  tariffTitle?: string;
+  validUntil?: string;
+  /** Срок с учётом допников-продлений */
+  effectiveValidUntil?: string;
+}
+
+/** Пункт прейскуранта: направление → нормочасы → цена занятия. */
+export interface PriceItem {
+  id: string;
+  direction: string;
+  directionLabel?: string;
+  normoHours: number;
+  price: number;
+  dateFrom: string;
+  title?: string;
+  isActive?: boolean;
 }
 
 export interface Lesson {
@@ -299,6 +319,10 @@ export interface Addendum {
   clause: string;
   text: string;
   signerId: string;
+  /** Дельта условий: новый пункт прейскуранта (с даты допника) */
+  tariffId?: string;
+  /** Дельта условий: продление срока действия договора */
+  newValidUntil?: string;
   createdAt: string;
 }
 

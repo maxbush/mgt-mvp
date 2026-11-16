@@ -1,6 +1,8 @@
+import os
 import uuid
 
 from django.db import models
+from django.utils import timezone
 
 
 class Lesson(models.Model):
@@ -28,6 +30,12 @@ class Lesson(models.Model):
         return self.substitute_teacher_id or (self.group.teacher_id if self.group_id else None)
 
 
+def _certificate_path(instance, filename):
+    """attendance_docs/YYYY/MM/<uuid>.<ext> — имя не угадывается перебором."""
+    ext = os.path.splitext(filename)[1].lower()
+    return f"attendance_docs/{timezone.now():%Y/%m}/{uuid.uuid4()}{ext}"
+
+
 class Attendance(models.Model):
     STATUS = [("present", "П"), ("absent", "Н"), ("sick", "Б"), ("excused", "У")]
 
@@ -36,7 +44,21 @@ class Attendance(models.Model):
     student = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="marks")
     status = models.CharField(max_length=16, choices=STATUS)
     comment = models.CharField(max_length=255, blank=True)
+    # Скан подтверждающего документа (справка) — обязателен для sick/excused по ТЗ,
+    # до загрузки отметка находится в состоянии «ждёт документ».
+    # Имя файла — uuid, чтобы URL нельзя было перебрать.
+    certificate = models.FileField(upload_to=_certificate_path, null=True, blank=True)
+    certificate_uploaded_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    DOC_REQUIRED = {"sick", "excused"}
+
+    @property
+    def doc_state(self):
+        """none — документ не нужен; pending — нужен, не загружен; confirmed — загружен."""
+        if self.status not in self.DOC_REQUIRED:
+            return "none"
+        return "confirmed" if self.certificate else "pending"
     updated_by = models.ForeignKey("core.User", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:

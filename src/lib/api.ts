@@ -6,7 +6,7 @@
  */
 import type {
   AcademicYear, Act, Addendum, AddendumTemplate, Adjustment, AttendanceMap, Branch, Contract, Enrollment,
-  Group, Lesson, MembershipChange, Payment, Settings, Signer, Student, Teacher, AuditEntry,
+  Group, Lesson, MembershipChange, Payment, PriceItem, Settings, Signer, Student, Teacher, AuditEntry,
 } from "./types";
 import type { DataState } from "./selectors";
 
@@ -44,12 +44,23 @@ async function req<T>(method: string, path: string, body?: unknown, opts: Reques
   return data as T;
 }
 
+async function reqFile<T>(path: string, fd: FormData): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { method: "POST", credentials: "include", headers: { "X-CSRFToken": csrf }, body: fd });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) {
+    const e = data?.error;
+    throw new ApiError(r.status, e?.code ?? "error", e?.message ?? `HTTP ${r.status}`);
+  }
+  return data as T;
+}
+
 export const api = {
   get: <T>(p: string) => req<T>("GET", p),
   post: <T>(p: string, b?: unknown) => req<T>("POST", p, b),
   put: <T>(p: string, b?: unknown) => req<T>("PUT", p, b),
   patch: <T>(p: string, b?: unknown) => req<T>("PATCH", p, b),
   del: (p: string) => req<void>("DELETE", p),
+  postFile: <T>(p: string, fd: FormData) => reqFile<T>(p, fd),
 };
 
 export async function csrfInit() {
@@ -90,10 +101,17 @@ const b2f = {
     status: s.status, parentName: s.parent_name ?? "", parentPhone: s.parent_phone ?? "",
     parentPhone2: s.parent_phone2 || undefined, notes: s.comment || undefined,
     createdAt: s.created_at ?? "", openingBalance: num(s.opening_balance),
+    contractState: s.contract_state ?? undefined,
   }),
   contract: (c: any): Contract => ({
     id: c.id, studentId: c.student, number: c.number, academicYearId: c.academic_year,
     date: c.date, status: c.status, closedAt: c.closed_at ?? undefined,
+    tariffId: c.tariff ?? undefined, tariffTitle: c.tariff_title ?? undefined,
+    validUntil: c.valid_until ?? undefined, effectiveValidUntil: c.effective_valid_until ?? undefined,
+  }),
+  priceItem: (p: any): PriceItem => ({
+    id: p.id, direction: p.direction, directionLabel: p.direction_label ?? undefined,
+    normoHours: p.normo_hours ?? 0, price: num(p.price), dateFrom: p.date_from, title: p.title || undefined, isActive: p.is_active ?? true,
   }),
   enrollment: (e: any): Enrollment => ({ id: String(e.id), studentId: e.student, groupId: e.group, from: e.date_from, to: e.date_to ?? null }),
   lesson: (l: any): Lesson => ({
@@ -122,7 +140,8 @@ const b2f = {
   }),
   addendum: (a: any): Addendum => ({
     id: a.id, contractId: a.contract, studentId: "", number: a.number, date: a.date,
-    templateId: a.template ?? "", clause: a.clause ?? "", text: a.body ?? "", signerId: a.signer ?? "", createdAt: a.created_at ?? "",
+    templateId: a.template ?? "", clause: a.clause ?? "", text: a.body ?? "", signerId: a.signer ?? "",
+    tariffId: a.tariff ?? undefined, newValidUntil: a.new_valid_until ?? undefined, createdAt: a.created_at ?? "",
   }),
   template: (t: any): AddendumTemplate => ({ id: t.id, title: t.name, clause: t.clause ?? "", text: t.body }),
 };
@@ -140,16 +159,18 @@ export interface MePayload {
 export const me = () => api.get<MePayload>("/auth/me");
 
 export async function hydrate(meData: MePayload): Promise<DataState> {
-  const [branches, years, signers, teachers, groups, students, contracts, enrollments, lessons, marks,
-    payments, adjustments, acts, audit, _templates, addendums, policies, taxRates, actRates, sysSet, sheets] = await Promise.all([
+  const [branches, years, signers, teachers, groups, students, contracts, enrollments, lessons, marksResp,
+    payments, adjustments, acts, audit, _templates, addendums, policies, taxRates, actRates, sysSet, sheets, priceItems] = await Promise.all([
     list<any>("/branches/"), list<any>("/academic-years/"), list<any>("/signers/"), list<any>("/teachers/"),
     list<any>("/groups/"), list<any>("/students/"), list<any>("/contracts/"), list<any>("/enrollments/"),
-    list<any>("/lessons/"), api.get<AttendanceMap>("/marks"),
+    list<any>("/lessons/"), api.get<{ marks: AttendanceMap; docStates: Record<string, string> }>("/marks"),
     list<any>("/payments/"), list<any>("/adjustments/"), list<any>("/acts/"), list<any>("/audit/").catch(() => [] as any[]),
     list<any>("/addendum-templates/"), list<any>("/addendums/"), list<any>("/charge-policies/"),
     list<any>("/tax-rates/"), list<any>("/act-rates/"), api.get<Record<string, unknown>>("/settings/"),
-    list<any>("/statement-sheets/").catch(() => [] as any[]),
+    list<any>("/statement-sheets/").catch(() => [] as any[]), list<any>("/price-items/").catch(() => [] as any[]),
   ]);
+  const marks = marksResp.marks ?? marksResp; // совместимость со старой формой
+  const docStates = marksResp.docStates ?? {};
   _sheets = sheets;
   const pol = policies.sort((a, b) => b.date_from.localeCompare(a.date_from))[0];
   const inc = taxRates.filter((t) => t.kind === "income_tax").sort((a, b) => b.date_from.localeCompare(a.date_from))[0];
@@ -177,6 +198,7 @@ export async function hydrate(meData: MePayload): Promise<DataState> {
     contracts: contracts.map(b2f.contract), lessons: lessons.map(b2f.lesson), attendance: marks,
     payments: payments.map(b2f.payment), adjustments: adjustments.map(b2f.adjustment), acts: acts.map(b2f.act),
     signers: signers.map(b2f.signer), audit: audit.map(b2f.audit), membership, addendums: addendums.map(b2f.addendum), settings,
+    priceItems: priceItems.map(b2f.priceItem), docStates,
   };
 }
 
@@ -195,7 +217,7 @@ function sheetApiId(frontendId: string): string | null {
 }
 
 export interface ServerStatementRow {
-  student: { id: string; name: string; grade: string; status: string };
+  student: { id: string; name: string; grade: string; status: string; contractState?: "none" | "expired" | "active" };
   groups: { id: string; code: string; name: string }[];
   opening: number; paid: number; consumedCount: number; consumed: number; closing: number;
   byGroup: Record<string, number>; multi: boolean; foreign: boolean;

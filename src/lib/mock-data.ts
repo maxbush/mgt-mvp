@@ -1,6 +1,6 @@
 import type {
-  AcademicYear, Act, Adjustment, AddendumTemplate, AppUser, AttendanceMap, AttendanceStatus, AuditEntry, Branch, Contract,
-  Enrollment, Group, Lesson, MembershipChange, Payment, PaymentMethod, Settings, Signer, Student, Teacher,
+  AcademicYear, Act, Addendum, AddendumTemplate, Adjustment, AppUser, AttendanceMap, AttendanceStatus, AuditEntry, Branch, Contract,
+  Enrollment, Group, Lesson, MembershipChange, Payment, PaymentMethod, PriceItem, Settings, Signer, Student, Teacher,
 } from "./types";
 import { actAmounts, isChargeable, priceOn } from "./calc";
 
@@ -134,8 +134,21 @@ const RAW: Raw[] = [
   ["s25", "Ждан", "Руслан", 2015, "4", "Ждан Николай Степанович", "09-193б", "2026-09-11", [["g_g1", null, "2026-09-25"]], false],
 ];
 
+/* ---------- прейскурант: направление → нормочасы → цена занятия ---------- */
+export const PRICE_ITEMS: PriceItem[] = [
+  { id: "pi_e30", direction: "electronics", directionLabel: "Электроника", normoHours: 8, price: 30, dateFrom: "2026-09-01", title: "Электроника · 8 н/ч · 30,00 BYN/занятие" },
+  { id: "pi_e35", direction: "electronics", directionLabel: "Электроника", normoHours: 8, price: 35, dateFrom: "2026-09-01", title: "Электроника (гимназия) · 8 н/ч · 35,00 BYN/занятие" },
+  { id: "pi_r30", direction: "robotics", directionLabel: "Робототехника", normoHours: 8, price: 30, dateFrom: "2026-09-01", title: "Робототехника · 8 н/ч · 30,00 BYN/занятие" },
+  { id: "pi_r35", direction: "robotics", directionLabel: "Робототехника", normoHours: 8, price: 35, dateFrom: "2026-10-01", title: "Робототехника (новая цена) · 8 н/ч · 35,00 BYN/занятие" },
+  { id: "pi_it45", direction: "it", directionLabel: "IT", normoHours: 8, price: 45, dateFrom: "2026-09-01", title: "IT · 8 н/ч · 45,00 BYN/занятие" },
+  { id: "pi_o40", direction: "other", directionLabel: "Другое", normoHours: 8, price: 40, dateFrom: "2026-09-01", title: "Прочее · 8 н/ч · 40,00 BYN/занятие" },
+];
+const GROUP_TARIFF: Record<string, string> = { g_e1: "pi_e30", g_e2: "pi_e30", g_r1: "pi_r30", g_r2: "pi_r30", g_k1: "pi_r30", g_it1: "pi_it45", g_g1: "pi_e35" };
+const tariffTitle = (pid: string) => PRICE_ITEMS.find((p) => p.id === pid)?.title;
+
 export const STUDENTS: Student[] = [];
 export const CONTRACTS: Contract[] = [];
+export const ADDENDUMS: Addendum[] = [];
 export const ENROLLMENTS: Enrollment[] = [];
 export const MEMBERSHIP: MembershipChange[] = [];
 
@@ -146,7 +159,12 @@ RAW.forEach((r, i) => {
     id, lastName, firstName, middleName: "", birthYear: birthYear ?? 0, grade, branchId: groupBranch(enr[0][0]), status: active === false ? "inactive" : "active",
     parentName, parentPhone: `+3752955501${String(i + 1).padStart(2, "0")}`, createdAt: cdate, openingBalance: 0,
   });
-  CONTRACTS.push({ id: `c_${id}`, studentId: id, number: no, academicYearId: "ay_2627", date: cdate, status: active === false ? "terminated" : "active", closedAt: active === false ? "2026-09-25" : undefined });
+  const tariffId = GROUP_TARIFF[enr[0][0]];
+  CONTRACTS.push({ id: `c_${id}`, studentId: id, number: no, academicYearId: "ay_2627", date: cdate, status: active === false ? "terminated" : "active", closedAt: active === false ? "2026-09-25" : undefined, tariffId, tariffTitle: tariffTitle(tariffId), validUntil: "2027-05-31", effectiveValidUntil: "2027-05-31" });
+  // допник «изменена стоимость»: ученики р2 переходят на новую цену с 01.10 (как история цен группы)
+  if (enr[0][0] === "g_r2" && active !== false) {
+    ADDENDUMS.push({ id: `ad_${id}`, contractId: `c_${id}`, studentId: id, number: `${no}-д1`, date: "2026-10-01", templateId: "tpl_price", clause: "Изменение стоимости", text: `Стоимость занятий по договору № ${no} с 01.10.2026 установлена по пункту прейскуранта «${tariffTitle("pi_r35")}».`, signerId: "sg1", tariffId: "pi_r35", createdAt: "2026-10-01T10:00:00" });
+  }
   if (id === "s07") CONTRACTS.push({ id: "c_s07_old", studentId: id, number: "12э", academicYearId: "ay_2526", date: "2025-09-20", status: "closed", closedAt: "2026-05-31" });
   enr.forEach((e, k) => {
     const from = e[1] ?? "2026-09-07";

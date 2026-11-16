@@ -1,7 +1,8 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Building2, CalendarRange, Calculator, Check, Database, Globe, Pencil, PenLine, Play, Plus, RotateCcw, Send, ShieldCheck, Star, Trash2, Webhook } from "lucide-react";
-import type { AcademicYear, Branch, Role, Signer } from "@/lib/types";
+import { Building2, CalendarRange, Calculator, Check, Copy, Database, Globe, Pencil, PenLine, Play, Plus, RotateCcw, Send, ShieldCheck, Star, Trash2, Webhook } from "lucide-react";
+import type { AcademicYear, Branch, Direction, Role, Signer } from "@/lib/types";
+import { DIRECTION_LABELS } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { ALL_PERMISSIONS, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_PERMISSIONS } from "@/lib/rbac";
 import { currentGroupPrice, currentRate } from "@/lib/selectors";
@@ -13,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
-import { Switch, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/form-controls";
+import { SimpleSelect, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/form-controls";
 import { ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/shared/bits";
 
@@ -79,6 +80,9 @@ export function SettingsPage() {
   const [newYear, setNewYear] = React.useState({ label: "2027/2028", startDate: "2027-09-01", endDate: "2028-05-31" });
   const [rateFrom, setRateFrom] = React.useState(settings.today);
   const [rateVal, setRateVal] = React.useState("");
+  const [pf, setPf] = React.useState<{ direction: Direction; normoHours: number; price: string; from: string; title: string } | null>(null);
+  const upsertPriceItem = useAppStore((s) => s.upsertPriceItem);
+  const removePriceItem = useAppStore((s) => s.removePriceItem);
   const [todayVal, setTodayVal] = React.useState(settings.today);
   const [tests, setTests] = React.useState<TestResult[] | null>(null);
   const [resetOpen, setResetOpen] = React.useState(false);
@@ -267,6 +271,50 @@ export function SettingsPage() {
                 <Field label="ФСЗН, %"><Input inputMode="decimal" defaultValue={settings.fsznPct} onBlur={(e) => { const v = parseFloat(e.target.value.replace(",", ".")); if (v >= 0 && v < 100) setSettings({ fsznPct: v }); }} className="tabular text-right" /></Field>
               </div>
               <p className="text-[12px] text-muted-foreground">Сейчас: {formatMoney(currentRate(state))} за занятие. Пример: 2 занятия → начислено 93,04 → 12,10 + 0,93 → к выплате 80,01.</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Прейскурант</CardTitle><CardDescription>Пункты прейскуранта по направлениям: нормочасы и стоимость. Договоры ссылаются на пункт — дети на одном направлении обучаются по одной цене.</CardDescription></CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <ul className="flex flex-col divide-y divide-border/60">
+                {[...state.priceItems].sort((a, b) => a.dateFrom < b.dateFrom ? -1 : 1).map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2 py-2">
+                    <div>
+                      <div className="text-[14px] font-medium">{p.title || DIRECTION_LABELS[p.direction as Direction] || p.direction}</div>
+                      <div className="text-[12px] text-muted-foreground">{DIRECTION_LABELS[p.direction as Direction] ?? p.direction} · {p.normoHours} н-ч · {formatMoney(p.price)} · с {formatDate(p.dateFrom)}{p.isActive === false ? " · неактивен" : ""}</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="size-7" title="Добавить следующую версию цены" onClick={() => { setPf({ direction: p.direction as Direction, normoHours: p.normoHours, price: "", from: settings.today, title: p.title ?? "" }); }}>
+                        <Copy className="size-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="size-7" onClick={() => removePriceItem(p.id)}><Trash2 className="size-3.5" /></Button>
+                    </div>
+                  </li>
+                ))}
+                {state.priceItems.length === 0 && <li className="py-3 text-[13px] text-muted-foreground">Пунктов нет — договоры привяжутся к цене группы</li>}
+              </ul>
+              {pf ? (
+                <form className="grid grid-cols-2 gap-2 rounded-lg border border-border/70 p-3" onSubmit={(e) => {
+                  e.preventDefault();
+                  const price = parseMoney(pf.price);
+                  if (price == null || price <= 0) { toast.error("Цена обязательна"); return; }
+                  if (pf.normoHours <= 0) { toast.error("Нормочасы обязательны"); return; }
+                  upsertPriceItem({ direction: pf.direction, normoHours: pf.normoHours, price, dateFrom: pf.from, title: pf.title, isActive: true });
+                  setPf(null);
+                }}>
+                  <Field label="Направление"><SimpleSelect value={pf.direction} onValueChange={(v) => setPf({ ...pf, direction: v })} options={(Object.keys(DIRECTION_LABELS) as Direction[]).map((d) => ({ value: d, label: DIRECTION_LABELS[d] }))} /></Field>
+                  <Field label="Название пункта"><Input value={pf.title} onChange={(e) => setPf({ ...pf, title: e.target.value })} placeholder="Приказ №12 от 01.09.2026" /></Field>
+                  <Field label="Нормочасов"><Input inputMode="decimal" value={pf.normoHours || ""} onChange={(e) => setPf({ ...pf, normoHours: parseFloat(e.target.value.replace(",", ".")) || 0 })} /></Field>
+                  <Field label="Стоимость, BYN"><Input inputMode="decimal" value={pf.price} onChange={(e) => setPf({ ...pf, price: e.target.value })} /></Field>
+                  <Field label="Действует с"><Input type="date" value={pf.from} onChange={(e) => setPf({ ...pf, from: e.target.value })} /></Field>
+                  <div className="flex items-end gap-2">
+                    <Button type="submit" size="sm"><Check className="size-4" /> Сохранить</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPf(null)}>Отмена</Button>
+                  </div>
+                </form>
+              ) : (
+                <Button variant="outline" size="sm" className="self-start" onClick={() => setPf({ direction: "electronics", normoHours: 64, price: "", from: settings.today, title: "" })}><Plus className="size-4" /> Добавить пункт</Button>
+              )}
             </CardContent>
           </Card>
           <Card>

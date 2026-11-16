@@ -17,6 +17,7 @@ function mapStatementRow(state: ReturnType<typeof useAppStore.getState>, r: Serv
     parentName: "", parentPhone: "", createdAt: "", openingBalance: 0,
   };
   const groups = (r.groups ?? []).map((g) => groupById(state, g.id)).filter((g): g is Group => !!g);
+  if (r.student.contractState) student.contractState = r.student.contractState;
   return {
     month, label: monthLabel(month),
     opening: r.opening, paid: r.paid, consumedCount: r.consumedCount, consumed: r.consumed, closing: r.closing,

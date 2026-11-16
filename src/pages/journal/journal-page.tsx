@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  BookOpenCheck, CalendarPlus, Check, Copy, Phone, Printer, Repeat, Trash2, Users, UserRoundX, CheckCheck, Eraser, Info, Ban, Lock, Hand, Table2, ChevronLeft, ChevronRight,
+  BookOpenCheck, CalendarPlus, Check, CheckCircle2, Copy, Paperclip, Phone, Printer, Repeat, Trash2, Users, UserRoundX, CheckCheck, Eraser, Info, Ban, Lock, Hand, Table2, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import type { AttendanceStatus, Lesson } from "@/lib/types";
 import { useAppStore, useCurMonth, useScopedGroupIds } from "@/lib/store";
@@ -62,6 +62,8 @@ function LessonMode({
   const present = list.filter((s) => state.attendance[attKey(l.id, s.id)] === "present").length;
   const sub = l.substituteTeacherId ? teacherById(state, l.substituteTeacherId) : null;
   const chipsRef = React.useRef<HTMLDivElement>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const certTarget = React.useRef<{ lessonId: string; studentId: string } | null>(null);
   React.useEffect(() => {
     chipsRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ inline: "center", block: "nearest" });
   }, [l.id]);
@@ -99,11 +101,25 @@ function LessonMode({
       )}
       <ul className="overflow-hidden rounded-xl border border-border/70 bg-card">
         {list.map((s) => {
-          const cur = state.attendance[attKey(l.id, s.id)];
+          const key = attKey(l.id, s.id);
+          const cur = state.attendance[key];
+          const docState = state.docStates?.[key] ?? (cur === "sick" || cur === "excused" ? "pending" : "none");
           return (
             <li key={s.id} className="flex items-center justify-between gap-2 border-b border-border/60 py-2 pl-3 pr-2 last:border-0">
               <div className="min-w-0">
-                <div className="text-[14px] font-medium leading-tight">{s.lastName} {s.firstName}</div>
+                <div className="flex items-center gap-1.5 text-[14px] font-medium leading-tight">
+                  {s.lastName} {s.firstName}
+                  {docState === "pending" && (
+                    <button
+                      className="inline-flex items-center gap-1 rounded-full border border-warning/50 bg-warning/15 px-1.5 py-0 text-[10px] text-amber-700 dark:text-amber-300"
+                      title="Отметка требует подтверждающего документа — загрузите скан справки"
+                      onClick={() => { certTarget.current = { lessonId: l.id, studentId: s.id }; fileRef.current?.click(); }}
+                    >
+                      <Paperclip className="size-3" /> справка
+                    </button>
+                  )}
+                  {docState === "confirmed" && <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/10 px-1.5 py-0 text-[10px] text-success" title="Справка загружена"><CheckCircle2 className="size-3" /></span>}
+                </div>
                 <a href={telHref(s.parentPhone)} className="mt-0.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground"><Phone className="size-3" />{formatPhone(s.parentPhone)}</a>
               </div>
               <div className="flex flex-none gap-1" role="group" aria-label={`Отметка: ${fullName(s)}`}>
@@ -131,6 +147,20 @@ function LessonMode({
         })}
         {list.length === 0 && <li className="p-6 text-center text-[13px] text-muted-foreground">В этот день в группе нет учеников</li>}
       </ul>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          const t = certTarget.current;
+          e.target.value = "";
+          if (!f || !t) return;
+          state.uploadCertificate?.(t.lessonId, t.studentId, f);
+          certTarget.current = null;
+        }}
+      />
       <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t border-border bg-card/95 p-2.5 shadow-float backdrop-blur" style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         <Button variant="outline" size="icon" className="size-12" disabled={idx <= 0} onClick={() => setActiveId(lessons[idx - 1].id)} aria-label="Предыдущее занятие"><ChevronLeft /></Button>
         <Button className="h-12 flex-1 text-[15px]" disabled={l.cancelled} onClick={() => { bulk(l, "present", true); }}>

@@ -2,10 +2,12 @@ from datetime import date as _date, timedelta
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from apps.core.dates import server_today
 from rest_framework import viewsets
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action, api_view
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.core.audit import audit, audit_delete
@@ -137,6 +139,32 @@ class LessonViewSet(viewsets.ModelViewSet):
             audit(request.user, "attendance", "journal.lesson", lesson.pk, after={"marks": marks})
         return Response({"updated": changed, "state": svc.lesson_state(lesson)})
 
+    ALLOWED_CERT_EXT = {".pdf", ".jpg", ".jpeg", ".png"}
+
+    @action(detail=True, methods=["post"], url_path="certificate")
+    def certificate(self, request, pk=None):
+        """POST /lessons/{id}/certificate {student_id, file} — скан справки к отметке sick/excused."""
+        lesson = self.get_object()
+        ok, code, reason = svc.lesson_edit_check(lesson, request.user)
+        if not ok:
+            _deny(code, reason)
+        m = get_object_or_404(Attendance, lesson=lesson, student_id=request.data.get("student_id"))
+        if m.status not in Attendance.DOC_REQUIRED:
+            raise ConflictError("Документ нужен только для отметок «болел»/«уважительная»")
+        f = request.FILES.get("file")
+        if not f:
+            raise ValidationError("Не передан файл (file)")
+        if f.size > 10 * 1024 * 1024:
+            raise ValidationError("Файл больше 10 МБ")
+        import os
+        if os.path.splitext(f.name)[1].lower() not in self.ALLOWED_CERT_EXT:
+            raise ValidationError("Допустимы pdf/jpg/png")
+        m.certificate = f
+        m.certificate_uploaded_at = timezone.now()
+        m.save(update_fields=["certificate", "certificate_uploaded_at"])
+        audit(request.user, "certificate", "journal.lesson", lesson.pk, after={"student": str(m.student_id), "file": m.certificate.name})
+        return Response({"docState": m.doc_state})
+
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses={200: OpenApiTypes.OBJECT})
 @api_view(["POST"])
@@ -183,4 +211,7 @@ def marks_map(request):
         qs = qs.filter(lesson__date__lte=request.query_params["to"])
     if request.user.role == "teacher" and request.user.teacher_id:
         qs = qs.filter(lesson__group_id__in=teacher_group_ids(request.user))
-    return Response({f"{m.lesson_id}|{m.student_id}": m.status for m in qs})
+    return Response({
+        "marks": {f"{m.lesson_id}|{m.student_id}": m.status for m in qs},
+        "docStates": {f"{m.lesson_id}|{m.student_id}": m.doc_state for m in qs},
+    })

@@ -1,13 +1,14 @@
 import { useMemo } from "react";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   AcademicYear, Act, Addendum, AttendanceStatus, AuditAction, Branch, Contract, EntityStatus, Group, Payment, PaymentMethod,
-  RecentItem, Role, Settings, Signer, Student, Teacher,
+  PriceItem, RecentItem, Role, Settings, Signer, Student, Teacher,
 } from "./types";
 import {
-  ACADEMIC_YEARS, ACTS, ADJUSTMENTS, ATTENDANCE, AUDIT, BRANCHES, CONTRACTS, DEFAULT_SETTINGS, ENROLLMENTS, GROUPS, LESSONS, MEMBERSHIP, PAYMENTS,
-  SIGNERS, STUDENTS, TEACHERS, USERS,
+  ACADEMIC_YEARS, ACTS, ADDENDUMS, ADJUSTMENTS, ATTENDANCE, AUDIT, BRANCHES, CONTRACTS, DEFAULT_SETTINGS, ENROLLMENTS, GROUPS, LESSONS, MEMBERSHIP, PAYMENTS,
+  PRICE_ITEMS, SIGNERS, STUDENTS, TEACHERS, USERS,
 } from "./mock-data";
 import type { DataState } from "./selectors";
 import {
@@ -71,7 +72,7 @@ interface Actions {
 
   log: (action: AuditAction, entity: string, entityId: string, description: string) => void;
 
-  upsertStudent: (student: Student, contract?: { id?: string; number: string; academicYearId: string; date: string }) => void;
+  upsertStudent: (student: Student, contract?: { id?: string; number: string; academicYearId: string; date: string; tariffId?: string; validUntil?: string }) => void;
   setStudentsStatus: (ids: string[], status: EntityStatus) => void;
   deleteStudent: (id: string) => void;
   closeContract: (contractId: string, status: "closed" | "terminated") => void;
@@ -113,6 +114,10 @@ interface Actions {
   setCurrentYear: (id: string) => void;
 
   addAddendum: (a: Omit<Addendum, "id" | "createdAt">) => void;
+  upsertPriceItem: (p: Omit<PriceItem, "id"> & { id?: string }) => void;
+  removePriceItem: (id: string) => void;
+  /** API-режим: загрузка скана справки к отметке sick/excused */
+  uploadCertificate?: (lessonId: string, studentId: string, file: File) => void;
 }
 
 export type Maybe<T> = T | Promise<T>;
@@ -160,8 +165,9 @@ const freshData = (): DataState => ({
   signers: SIGNERS,
   audit: AUDIT,
   membership: MEMBERSHIP,
-  addendums: [],
+  addendums: ADDENDUMS,
   settings: DEFAULT_SETTINGS,
+  priceItems: PRICE_ITEMS,
 });
 
 const closedReason = (s: DataState, date: string): string | null => {
@@ -287,7 +293,7 @@ export const useAppStore = create<AppState>()(
             const existing = contract.id ? get().contracts.find((c) => c.id === contract.id) : undefined;
             const c: Contract = existing
               ? { ...existing, number: contract.number, academicYearId: contract.academicYearId, date: contract.date }
-              : { id: uid("c"), studentId: student.id, number: contract.number, academicYearId: contract.academicYearId, date: contract.date, status: "active" };
+              : { id: uid("c"), studentId: student.id, number: contract.number, academicYearId: contract.academicYearId, date: contract.date, status: "active", tariffId: contract.tariffId, validUntil: contract.validUntil, effectiveValidUntil: contract.validUntil };
             set((s) => ({ contracts: existing ? s.contracts.map((x) => (x.id === c.id ? c : x)) : [...s.contracts, c] }));
             if (!existing) log(exists ? "update" : "create", "contract", c.id, `Договор ${c.number} — ${fullName(student)}`);
           }
@@ -646,6 +652,18 @@ export const useAppStore = create<AppState>()(
           const c = get().contracts.find((x) => x.id === a.contractId);
           log("create", "addendum", addendum.id, `Доп. соглашение №${a.number} к договору ${c?.number ?? ""}`);
         },
+
+        upsertPriceItem: (p) => {
+          const item: PriceItem = { ...p, id: p.id ?? uid("pi"), title: p.title || `${p.directionLabel ?? p.direction} · ${p.normoHours} н/ч · ${p.price} BYN` };
+          set((s) => ({ priceItems: s.priceItems.some((x) => x.id === item.id) ? s.priceItems.map((x) => (x.id === item.id ? item : x)) : [...s.priceItems, item] }));
+          log("update", "settings", item.id, `Прейскурант: ${item.title}`);
+        },
+        removePriceItem: (id) => {
+          set((s) => ({ priceItems: s.priceItems.filter((x) => x.id !== id) }));
+        },
+        uploadCertificate: () => {
+          toast.error("Загрузка файлов доступна только в режиме API");
+        },
       };
     },
     {
@@ -673,6 +691,7 @@ const SWAPPABLE_ACTIONS = [
   "rejectPayment", "requeuePayment", "addAdjustment", "removeAdjustment",
   "upsertTeacher", "setTeacherStatus", "generateActs", "updateAct", "deleteAct",
   "upsertSigner", "removeSigner", "upsertBranch", "addAcademicYear", "setCurrentYear", "addAddendum",
+  "upsertPriceItem", "removePriceItem", "uploadCertificate",
 ] as const;
 const LOCAL_ACTIONS = Object.fromEntries(SWAPPABLE_ACTIONS.map((k) => [k, useAppStore.getState()[k]])) as Partial<AppState>;
 

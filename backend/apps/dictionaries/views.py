@@ -7,17 +7,19 @@ from apps.core.audit import audit, audit_delete, audit_save
 from apps.core.permissions import HasCode
 
 from .models import (
-    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, Signer, StatementSheet, SystemSetting, TaxRate,
+    AcademicYear, ActRate, AddendumTemplate, Branch, ChargePolicy, Direction, PriceItem, Signer, StatementSheet, SystemSetting, TaxRate,
 )
 from .serializers import (
     AcademicYearSerializer, ActRateSerializer, AddendumTemplateSerializer, BranchSerializer, ChargePolicySerializer,
-    DirectionSerializer, SignerSerializer, StatementSheetSerializer, TaxRateSerializer,
+    DirectionSerializer, PriceItemSerializer, SignerSerializer, StatementSheetSerializer, TaxRateSerializer,
 )
 
 
 class BaseDictViewSet(viewsets.ModelViewSet):
+    # Чтение справочников — всем залогиненным (гидрация стора тянет их для любой
+    # роли); записи — только settings.edit.
     required_code = "settings.edit"
-    view_code = "settings.edit"
+    view_code = "*"
     permission_classes = [HasCode]
 
     def perform_create(self, s):
@@ -81,6 +83,11 @@ class ChargePolicyViewSet(BaseDictViewSet):
 class TaxRateViewSet(BaseDictViewSet):
     queryset = TaxRate.objects.all()
     serializer_class = TaxRateSerializer
+
+
+class PriceItemViewSet(BaseDictViewSet):
+    queryset = PriceItem.objects.all()
+    serializer_class = PriceItemSerializer
 
 
 from rest_framework import viewsets as _vs
