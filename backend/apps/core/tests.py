@@ -503,3 +503,20 @@ class TariffAndDocsTests(TestCase):
         good2.name = "cert.pdf"
         r = c.post(f"/api/v1/lessons/{m.lesson_id}/certificate/", {"student_id": str(m.student_id), "file": good2})
         self.assertEqual(r.status_code, 409)
+
+    def test_closed_contract_without_date_stops_tariff(self):
+        """Закрытый/расторгнутый договор без closed_at не должен давать тариф."""
+        from apps.finance.services import _contract_price, _tariffs_index
+        from apps.students.models import Contract
+        con = Contract.objects.filter(status="active", tariff__isnull=False).first()
+        sid = str(con.student_id)
+        direc = con.tariff.direction
+        tariffs = _tariffs_index([sid])
+        self.assertIsNotNone(_contract_price(tariffs[sid], direc, "2026-10-15"))
+        Contract.objects.filter(pk=con.pk).update(status="closed", closed_at=None)
+        tariffs = _tariffs_index([sid])
+        self.assertIsNone(_contract_price(tariffs[sid], direc, "2026-10-15"))
+        Contract.objects.filter(pk=con.pk).update(status="closed", closed_at="2026-10-05")
+        tariffs = _tariffs_index([sid])
+        self.assertIsNone(_contract_price(tariffs[sid], direc, "2026-10-15"))
+        self.assertIsNotNone(_contract_price(tariffs[sid], direc, "2026-10-04"))

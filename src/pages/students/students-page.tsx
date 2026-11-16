@@ -9,7 +9,7 @@ import type { Student } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { can } from "@/lib/rbac";
 import { buildStudentRows, type StudentRow } from "@/lib/rows";
-import { studentContracts, yearById } from "@/lib/selectors";
+import { contractValidUntil, studentContracts, yearById } from "@/lib/selectors";
 import { registryXlsxUrl } from "@/lib/api";
 import { cn, compareRu, formatDate, formatPhone } from "@/lib/utils";
 import { DataTable, DataTableColumnHeader, arrayIncludesSomeFilter, inArrayFilter } from "@/components/data-table/data-table";
@@ -46,7 +46,7 @@ export function ContractHistory({ studentId, compact }: { studentId: string; com
               <StatusBadge status={c.status} />
               <span className="text-[12px] text-muted-foreground">
                 от {formatDate(c.date)}
-                {c.effectiveValidUntil && ` · до ${formatDate(c.effectiveValidUntil)}`}
+                {contractValidUntil(state, c) && ` · до ${formatDate(contractValidUntil(state, c)!)}`}
                 {c.closedAt && ` · закрыт ${formatDate(c.closedAt)}`}
               </span>
               {c.tariffId && (
@@ -54,7 +54,7 @@ export function ContractHistory({ studentId, compact }: { studentId: string; com
                   {state.priceItems.find((p) => p.id === c.tariffId)?.title ?? c.tariffTitle ?? "тариф"}
                 </Badge>
               )}
-              {c.status === "active" && c.effectiveValidUntil && c.effectiveValidUntil < state.settings.today && (
+              {c.status === "active" && contractValidUntil(state, c) && contractValidUntil(state, c)! < state.settings.today && (
                 <Badge variant="destructive">просрочен</Badge>
               )}
               {adds.length > 0 && (

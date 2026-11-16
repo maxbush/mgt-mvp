@@ -41,7 +41,11 @@ def _tariffs_index(student_ids):
     )
     for c in contracts:
         entries = idx.setdefault(str(c.student_id), {})
-        eff_from, eff_to = _ds(c.date), _ds(c.closed_at) if c.closed_at else "9999-12-31"
+        eff_from = _ds(c.date)
+        # Окно тарифа: действующий договор — открытое (просрочка списывается по
+        # последнему тарифу); закрытый/расторгнутый — до closed_at, а если дата
+        # закрытия не проставлена (битые данные) — тариф не действует вовсе.
+        eff_to = _ds(c.closed_at) if c.closed_at else ("9999-12-31" if c.status == "active" else eff_from)
         if c.tariff_id:
             entries.setdefault(c.tariff.direction, []).append((eff_from, eff_to, c.tariff.price, str(c.tariff_id)))
         for a in c.addendums.all():

@@ -1,3 +1,4 @@
+import os
 from datetime import date as _date, timedelta
 
 from django.db import transaction
@@ -127,14 +128,21 @@ class LessonViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             for sid, status_v in marks.items():
                 if status_v is None:
-                    changed += Attendance.objects.filter(lesson=lesson, student_id=sid).delete()[0]
+                    for m in Attendance.objects.filter(lesson=lesson, student_id=sid):
+                        if m.certificate:
+                            m.certificate.delete(save=False)  # Django файлы на диске сам не чистит
+                        m.delete()
+                        changed += 1
                     continue
                 if status_v not in valid:
                     continue
-                _, created = Attendance.objects.update_or_create(
+                m, created = Attendance.objects.update_or_create(
                     lesson=lesson, student_id=sid,
                     defaults={"status": status_v, "updated_by": request.user},
                 )
+                # статус больше не требует документа — чистим старый файл
+                if not created and m.status not in Attendance.DOC_REQUIRED and m.certificate:
+                    m.certificate.delete(save=True)
                 changed += 1
             audit(request.user, "attendance", "journal.lesson", lesson.pk, after={"marks": marks})
         return Response({"updated": changed, "state": svc.lesson_state(lesson)})
@@ -156,9 +164,10 @@ class LessonViewSet(viewsets.ModelViewSet):
             raise ValidationError("Не передан файл (file)")
         if f.size > 10 * 1024 * 1024:
             raise ValidationError("Файл больше 10 МБ")
-        import os
         if os.path.splitext(f.name)[1].lower() not in self.ALLOWED_CERT_EXT:
             raise ValidationError("Допустимы pdf/jpg/png")
+        if m.certificate:
+            m.certificate.delete(save=False)  # замена — старый файл не сиротеет
         m.certificate = f
         m.certificate_uploaded_at = timezone.now()
         m.save(update_fields=["certificate", "certificate_uploaded_at"])

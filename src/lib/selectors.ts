@@ -154,7 +154,9 @@ export const contractPrice = (s: DataState, studentId: string, direction: string
   };
   for (const c of s.contracts) {
     if (c.studentId !== studentId) continue;
-    const to = c.closedAt ?? "9999-12-31";
+    // действующий — открытое окно (просрочка списывается по последнему тарифу);
+    // закрытый/расторгнутый — до closedAt, без него тариф не действует
+    const to = c.closedAt ?? (c.status === "active" ? "9999-12-31" : c.date);
     consider(c.tariffId, c.date, to);
     for (const a of s.addendums) if (a.contractId === c.id) consider(a.tariffId, a.date, to);
   }

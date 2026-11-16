@@ -117,7 +117,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 
 
 class ContractViewSet(viewsets.ModelViewSet):
-    queryset = Contract.objects.select_related("student", "academic_year")
+    queryset = Contract.objects.select_related("student", "academic_year").prefetch_related("addendums")
     serializer_class = ContractSerializer
     required_code = "students.edit"
     view_code = "students.view"
@@ -145,10 +145,15 @@ class ContractViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
+        from apps.core.dates import server_today
         obj = self.get_object()
         obj.status = "closed"
-        obj.save(update_fields=["status"])
-        audit(request.user, "status", "students.contract", obj.pk, after={"status": "closed"})
+        if not obj.closed_at:
+            obj.closed_at = server_today()
+            obj.save(update_fields=["status", "closed_at"])
+        else:
+            obj.save(update_fields=["status"])
+        audit(request.user, "status", "students.contract", obj.pk, after={"status": "closed", "closed_at": str(obj.closed_at) if obj.closed_at else None})
         return Response(ContractSerializer(obj).data)
 
     @action(detail=False, methods=["get"], url_path="check-number")
